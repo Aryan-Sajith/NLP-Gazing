@@ -1,10 +1,8 @@
-# -- Phase 1: # CSV Data Formatting and Preprocessing
+# Phase 1: CSV Data Formatting and Preprocessing
 
 This document outlines the initial data processing steps taken to clean and standardize raw CSV data. The primary tool for this process is a Python script designed to handle common CSV formatting issues.
 
 ---
-
-## Steps Taken So Far
 
 ### 1. Script Development for Data Cleaning
 
