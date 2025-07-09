@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 # Ignore local user gazing data files
-user-data/
+data/
