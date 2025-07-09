@@ -94,7 +94,7 @@ def extract_query_data(csv_file_path, output_json_path):
         print(f"Query data successfully extracted to {output_json_path}")
         
         # Print summary
-        print("\\nExtraction Summary:")
+        print("\nExtraction Summary:")
         for user_id in user_task_data:
             for task_id in user_task_data[user_id]:
                 query_count = len(user_task_data[user_id][task_id]['queries'])
@@ -127,10 +127,10 @@ def main():
     success = extract_query_data(csv_file, json_file)
     
     if success:
-        print("\\nStep 1 completed successfully!")
+        print("\nStep 1 completed successfully!")
         print(f"Query data saved to: {json_file}")
     else:
-        print("\\nStep 1 failed!")
+        print("\nStep 1 failed!")
 
 
 if __name__ == "__main__":
