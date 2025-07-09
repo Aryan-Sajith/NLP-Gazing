@@ -6,7 +6,7 @@ This document outlines the initial data processing steps taken to clean and stan
 
 ### 1. Script Development for Data Cleaning
 
-A Python script (`step-0-data-format.py`) was developed to automate the cleaning of raw data files.
+A Python script (`src/step-0-data-format.py`) was developed to automate the cleaning of raw data files.
 
 **Key Features:**
 
