@@ -1,6 +1,6 @@
 """
 Step 1: Extract Query Data
-Extracts query data from the LLM logs and creates a structured JSON file.
+Extracts query data from the LLM logs(query logs table) and creates a structured JSON file for easier data processing and analysis.
 """
 
 import pandas as pd
