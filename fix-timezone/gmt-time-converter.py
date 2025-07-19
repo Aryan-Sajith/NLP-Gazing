@@ -42,9 +42,9 @@ def convert_to_gmt(timestamp_str, timezone_str):
         print(f"Error converting timestamp '{timestamp_str}' with timezone '{timezone_str}': {e}")
         return None
 
-def main(input_file='task_table.csv', user_id_col='user_id', timestamp_col='finished'):
+def main(input_file='data/task_table.csv', user_id_col='user_id', timestamp_col='finished'):
     # Read the timezone mapping
-    with open('user_timezones.json', 'r') as f:
+    with open('data/user_timezones.json', 'r') as f:
         user_timezones = json.load(f)
     
     # Read the CSV file
@@ -76,14 +76,10 @@ def main(input_file='task_table.csv', user_id_col='user_id', timestamp_col='fini
     
     # Save the updated CSV
     # Ensure the output file name is derived from the input file name
-    output_file = f"{input_file.split('.')[0]}_with_gmt.csv"
+    output_file = f"data/{input_file[5:-3]}_with_gmt.csv"
     df.to_csv(output_file, index=False)
     print(f"\nConversion complete! Processed {len(df)} rows.")
     print(f"Output saved to: {output_file}")
 
 if __name__ == "__main__":
-    # Start by moving to the script's directory for relative file access
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
-    # Run the main function
     main()

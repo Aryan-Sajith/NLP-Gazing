@@ -208,6 +208,3 @@ __marimo__/
 
 # Ignore local user gazing data files
 data/
-
-# Ignore local user timezone conversion files
-fix-timezone/user_timezones.json

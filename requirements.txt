@@ -1,4 +1,0 @@
-# Step 1 dependencies - Extracts queries from a CSV file for matching with user gazing data
-pandas
-numpy
-datetime
