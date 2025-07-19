@@ -12,7 +12,7 @@ This document outlines the initial data processing steps taken to clean and stan
 
 ### 1. Script Development for Data Cleaning
 
-A Python script (`src/step-0-data-format.py`) was developed to automate the cleaning of raw data files.
+A Python script (`src/step-0-data-format.py`) was developed to automate the cleaning of raw data files. These raw data files can be obtained directly from corresponding project members.
 
 **Key Features:**
 
@@ -40,7 +40,7 @@ The raw gaze data suffered from several formatting inconsistencies that prevente
 
 ### 1. Script Development for Query Processing
 
-A Python script (`src/step-1-extract-queries.py`) was developed to extract and structure query data from the raw CSV logs.
+A Python script (`src/step-1-extract-queries.py`) was developed to extract and structure query data from the raw CSV logs. These raw CSV logs can be obtained from the phpMyAdmin MySQL database. Specifically this phase works on the Mturk query_logs_table which contains query data collected so far.
 
 **Key Features:**
 * **CSV to JSON Conversion:** Processes the `one_llm_query_logs_table.csv` file to extract user queries, LLM responses, and timestamps
@@ -53,7 +53,7 @@ A Python script (`src/step-1-extract-queries.py`) was developed to extract and s
 
 ### 1. Script Development for Data Correlation
 
-A sophisticated Python script (`src/step-2-match-gaze-queries.py`) was developed to correlate gaze tracking data with specific user queries based on timestamps and text content matching.
+A sophisticated Python script (`src/step-2-match-gaze-queries.py`) was developed to correlate gaze tracking data with specific user queries based on timestamps and text content matching. This combines files from both phase 1 and 2 to create training data for the model.
 
 **Key Features:**
 * **Recursive File Processing:** Automatically discovers and processes files in user/task directory structures

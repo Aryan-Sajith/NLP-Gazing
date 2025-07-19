@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Step 2: Match Gaze Data with Query IDs
 Processes gaze data and assigns query IDs based on timestamps and text matching.
