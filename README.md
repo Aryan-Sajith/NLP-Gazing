@@ -1,3 +1,9 @@
+# Phase 0: Fixing timezones in database
+
+Our data initially stored timestamps in local timezones as opposed to the universal UTC/GMT timezone format, this is fixed in this phase.
+
+Use files from the fix-timezone/ directory to extract timezones and convert timestamps into gmt
+
 # Phase 1: CSV Data Formatting and Preprocessing
 
 This document outlines the initial data processing steps taken to clean and standardize raw CSV data. The primary tool for this process is a Python script designed to handle common CSV formatting issues.
