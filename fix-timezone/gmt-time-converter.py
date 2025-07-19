@@ -2,6 +2,7 @@ import pandas as pd
 import json
 import pytz
 from dateutil import parser
+import os
 
 def convert_to_gmt(timestamp_str, timezone_str):
     """
@@ -41,7 +42,7 @@ def convert_to_gmt(timestamp_str, timezone_str):
         print(f"Error converting timestamp '{timestamp_str}' with timezone '{timezone_str}': {e}")
         return None
 
-def main(input_file='query_logs_table.csv', user_id_col='user_id', timestamp_col='query_timestamp'):
+def main(input_file='task_table.csv', user_id_col='user_id', timestamp_col='finished'):
     # Read the timezone mapping
     with open('user_timezones.json', 'r') as f:
         user_timezones = json.load(f)
@@ -81,4 +82,8 @@ def main(input_file='query_logs_table.csv', user_id_col='user_id', timestamp_col
     print(f"Output saved to: {output_file}")
 
 if __name__ == "__main__":
+    # Start by moving to the script's directory for relative file access
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
+    # Run the main function
     main()
