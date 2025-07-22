@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import pytz
 from dateutil import parser
-import os
 
 def convert_to_gmt(timestamp_str, timezone_str):
     """
