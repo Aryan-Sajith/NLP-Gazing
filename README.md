@@ -1,91 +1,84 @@
-# Phase 0: Fixing timezones in database
+# User Metrics and LLM Output Preference Alignment Research
 
-Our data initially stored timestamps in local timezones as opposed to the universal UTC/GMT timezone format, this is fixed in this phase.
+## Overview
 
-Use files from the fix-timezone/ directory to extract timezones and convert timestamps into gmt
+The main goal of this project is to determine if user usage metrics(like gazing, mouse movements, and such) can be utilized to better predict user preferences for LLM outputs.
 
-# Phase 1: CSV Data Formatting and Preprocessing
 
-This document outlines the initial data processing steps taken to clean and standardize raw CSV data. The primary tool for this process is a Python script designed to handle common CSV formatting issues.
 
----
+For the first phase of this project I developed a set of scripts to process raw user interaction data (gaze and mouse movements) and align it with corresponding Large Language Model (LLM) query-response logs. The goal is to produce a clean, annotated dataset where each moment of user gaze is mapped to a specific query they were viewing.
 
-### 1. Script Development for Data Cleaning
+The user metrics and query data processing and fusion pipeline is broken down into three main steps:
 
-A Python script (`src/step-0-data-format.py`) was developed to automate the cleaning of raw data files. These raw data files can be obtained directly from corresponding project members.
-
-**Key Features:**
-
-* **Recursive File Search:** The script can recursively search through a specified directory to find all files matching a given name (e.g., `rel_gaze_one.csv`).
-* **In-Place Formatting:** It processes each file and replaces the original with a corrected version, ensuring the data is standardized.
-* **Error Handling:** The script includes error handling to prevent data loss and reports any issues encountered during processing.
-
-### 2. Addressed Technical Challenges
-
-The raw gaze data suffered from several formatting inconsistencies that prevented reliable parsing. The script was specifically designed to overcome these challenges.
-
-#### Challenge 1: Inconsistent Column Count
-
-* **Problem:** The third column, intended for text data, often contained commas. This caused standard CSV parsers to incorrectly split the text across multiple columns, resulting in rows with more than the expected six columns.
-* **Solution:** The script identifies rows with more than six columns and intelligently concatenates the extra fields back into the third column, using a `, ` separator. This restores the intended structure of `[x_coord, y_coord, text, id_number, timestamp1, timestamp2]`.
-
-#### Challenge 2: Improper Quote Escaping
-
-* **Problem:** Text fields containing double quotes (`"`) were not properly escaped when using (`"`) to consistently surround all text. According to CSV standards, any double quote within a quoted field must be doubled (`""`) to be parsed correctly.
-* **Solution:** A function was implemented to handle CSV quote escaping. It wraps the entire text field in double quotes and replaces any internal double quotes with two double quotes (`""`). This ensures that CSV parsers can correctly interpret the data without errors.
+1.  **Initial Data Formatting**: Cleans and corrects raw, malformed CSV interaction files.
+2.  **Query Extraction**: Parses a master log of all LLM queries and organizes them into a structured JSON file.
+3.  **Gaze-Query Matching**: Annotates the cleaned interaction data with query IDs by matching the text users were looking at with the text from the query logs.
 
 ---
 
-# Phase 2: Query Data Extraction
+## Data Processing Pipeline
 
-### 1. Script Development for Query Processing
+### Step 0: Initial Data Formatting
 
-A Python script (`src/step-1-extract-queries.py`) was developed to extract and structure query data from the raw CSV logs. These raw CSV logs can be obtained from the phpMyAdmin MySQL database. Specifically this phase works on the Mturk query_logs_table which contains query data collected so far.
+-   **Script**: `step-0-data-format.py`
+-   **Input**: Raw `rel_*.csv` files located in a specified directory (e.g., `to-fix-data/`). These files often have formatting errors where text containing commas has been split across multiple columns.
+-   **Process**: The script recursively finds all relevant CSV files, corrects the column structure by rejoining text that was improperly split(because commas were not escaped), and properly escapes quotes(since I surround all text in quotes to begin with). The corrected files overwrite the originals in place.
+-   **Usage**:
+    ```bash
+    python step-0-data-format.py <path_to_data_directory>
+    ```
 
-**Key Features:**
-* **CSV to JSON Conversion:** Processes the `one_llm_query_logs_table.csv` file to extract user queries, LLM responses, and timestamps
-* **Hierarchical Data Structure:** Organizes data by user ID and task ID for efficient lookup during gaze matching
-* **Timestamp Parsing:** Converts query timestamps to Unix format for synchronization with gaze data
+### Step 1: Extracting Query Logs
 
----
+-   **Script**: `step-1-extract-queries.py`
+-   **Input**: A master CSV log file containing all user queries and LLM responses (`full_query_logs_table.csv`). This helps structurally organize and efficiently access the associated queries and metadata associated with each user and task combination without having to re-read our original query logs table.
+-   **Process**: This script reads the master log and extracts all relevant fields for each query (`user_id`, `task_id`, `query_id`, `user_query`, `llm_response_1`, `llm_response_2`, and `query_timestamp`). It then organizes this information into a structured JSON file, grouped by user and task, and sorted by timestamp.
+-   **Output**: `query_data.json`
 
-# Phase 3: Gaze Data and Query Matching
+### Step 2: Matching Gaze Data with Queries
 
-### 1. Script Development for Data Correlation
-
-A sophisticated Python script (`src/step-2-match-gaze-queries.py`) was developed to correlate gaze tracking data with specific user queries based on timestamps and text content matching. This combines files from both phase 1 and 2 to create training data for the model.
-
-**Key Features:**
-* **Recursive File Processing:** Automatically discovers and processes files in user/task directory structures
-* **Dual-Condition Matching:** Uses both timestamp thresholds and text content verification for query transitions
-* **Confirmation System:** Validates query transitions by checking subsequent gaze entries to prevent false positives
-* **Flexible Pattern Matching:** Supports multiple file patterns and customizable confirmation counts
-
-### 2. Addressed Technical Challenges
-
-The gaze-to-query matching process presented several complex challenges that required iterative refinement of the matching algorithm.
-
-#### Challenge 1: Premature Query Transitions
-
-* **Problem:** Initial implementations switched queries immediately upon timestamp conditions, leading to incorrect associations when users briefly looked at content from upcoming queries.
-* **Solution:** Implemented a confirmation system that requires a specified number of subsequent gaze entries to match the target query content before confirming a transition.
-
-#### Challenge 2: Insufficient Text Matching
-
-* **Problem:** Simple string matching failed to handle variations in text formatting, case sensitivity, and partial matches between gaze data and query content.
-* **Solution:** Developed a robust text matching function that performs case-insensitive substring matching with minimum length requirements (4+ characters) to avoid false positives from short, common words.
-
-#### Challenge 3: Placeholder Entry Handling
-
-* **Problem:** Gaze data contains placeholder entries (-1, -1) that don't represent actual user attention, causing noise in the matching process.
-* **Solution:** Modified the confirmation system to skip placeholder entries entirely, only considering valid gaze coordinates when confirming query transitions.
-
-#### Challenge 4: End-of-File Boundary Conditions
-
-* **Problem:** Confirmation checks near the end of gaze files couldn't find enough subsequent entries, causing valid transitions to be rejected.
-* **Solution:** Implemented adaptive confirmation that accepts transitions based on available entries when fewer than the required confirmation count remain in the file.
+-   **Script**: `step-2-match-gaze-queries.py`
+-   **Input**:
+    1.  The formatted `rel_*.csv` files from Step 0.
+    2.  The `query_data.json` file from Step 1.
+-   **Process**: This is the core matching script. It iterates through each row of the interaction data. Using the character index and a small window of surrounding text provided in the gaze data, it finds the corresponding LLM response text in `query_data.json`. Each row is then annotated with the matched `query_id`. For non-standard entries like when the user isn't looking at the screen or when they look at our experimentally provided prompt(instructing them how to perform their tasks), I used clearly defined query_ids like -1 and -2 which don't occur in the true dataset and additional boolean flags to properly convey this binary information for better model training.
+-   **Output**: The script generates new annotated CSV files with the suffix `-query-id-assigned.csv`. These files are placed in the same directory as the input files and contain the original data plus additional columns for analysis.
 
 ---
 
-## Next Steps
-The next phase will involve analyzing the matched gaze-query patterns to determine if user gazing metrics can help predict llm preference. For now only singular llm tasks are being processed, I will also look to process and utilize multi-llm queries in this next phase.
+## Final Output Schema
+
+The final `-query-id-assigned.csv` files contain the following columns:
+
+| Column Name            | Description                                                                                              | Data Type |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | --------- |
+| `x`                    | The x-coordinate of the gaze/mouse.                                                                      | float     |
+| `y`                    | The y-coordinate of the gaze/mouse.                                                                      | float     |
+| `window`               | A small snippet of text the user was looking at.                                                         | string    |
+| `centre_idx`           | The character index at the center of the user's gaze within the full text.                               | integer   |
+| `rel_ts`               | Relative timestamp.                                                                                      | integer   |
+| `abs_ts`               | Absolute timestamp.                                                                                      | integer   |
+| `query_id`             | The ID of the query the user was viewing.                                                                | integer   |
+| `is_experimental_text` | A boolean flag that is `true` if the user was looking at the static instructional prompt.                | boolean   |
+| `is_not_looking`       | A boolean flag that is `true` if the user's gaze was off-screen (typically at coordinates -1, -1).         | boolean   |
+
+---
+
+## How to Run the Pipeline
+
+1.  Place all raw user data (e.g., `P1/Task1/rel_gaze.csv`) into a main data directory (e.g., `to-fix-data/`).
+2.  Place the master query log (`full_query_logs_table.csv`) in the project's root directory.
+3.  Execute the scripts in order:
+
+    ```bash
+    # Step 0: Fix the raw CSV files
+    python step-0-data-format.py to-fix-data/
+
+    # Step 1: Generate the query data JSON file
+    python step-1-extract-queries.py
+
+    # Step 2: Match gaze data to queries and generate annotated files
+    python step-2-match-gaze-queries.py
+    ```
+
+4.  The final, annotated data will be available as `*-query-id-assigned.csv` files within their original subdirectories.
