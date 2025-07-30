@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 CSV Data Formatter Script
 
@@ -31,7 +30,7 @@ def fix_csv_row(row):
         timestamp1 = row[-2]
         timestamp2 = row[-1]
         text_parts = row[2:-3]
-        combined_text = ", ".join(text_parts)
+        combined_text = ",".join(text_parts)
         combined_text = escape_quotes(combined_text)
         return [x_coord, y_coord, combined_text, id_number, timestamp1, timestamp2]
     else:
@@ -58,7 +57,7 @@ def process_file(file_path):
                 line = line.strip()
                 if not line:
                     continue
-                row = [field.strip() for field in line.split(',')]
+                row = [field for field in line.split(',')]
                 fixed_row = fix_csv_row(row)
                 processed_rows.append(fixed_row)
         
@@ -109,12 +108,21 @@ def main():
     parser = argparse.ArgumentParser(
         description='Recursively process and replace CSV files with formatted versions'
     )
-    
-    parser.add_argument('directory', 
-                       help='Directory to search recursively')
+    default_directory = "to-fix-data/"
+    default_filenames = [
+        'rel_gaze_one.csv', 
+        'rel_gaze_two.csv', 
+        'rel_mouse_left.csv', 
+        'rel_mouse_right.csv', 
+        'rel_gaze.csv', 
+        'rel_mouse.csv'
+    ]
+    parser.add_argument('directory', nargs='?',
+                       help='Directory to search recursively',
+                       default=default_directory)
     parser.add_argument('--filenames', '-f', nargs='+', 
-                       default=['rel_gaze_one.csv'],
-                       help='Filenames to process (default: rel_gaze_one.csv)')
+                       default=default_filenames,
+                       help='Filenames to process')
     
     args = parser.parse_args()
     
