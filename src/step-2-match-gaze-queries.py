@@ -62,7 +62,7 @@ for src in BASE_DIR.rglob("rel_*.csv"):
         continue
 
     # pick which response column matters for this file
-    resp_key = "llm_response_2" if src.stem.endswith("_two") else "llm_response_1"
+    resp_key = "llm_response_2" if src.stem.endswith("_two") or src.stem.endswith("_right") else "llm_response_1"
 
     # build (query_id, response_text) pairs
     responses = [
