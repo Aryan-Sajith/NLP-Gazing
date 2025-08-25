@@ -42,13 +42,13 @@ The user metrics and query data processing and fusion pipeline is broken down in
     1.  The formatted `rel_*.csv` files from Step 0.
     2.  The `query_data.json` file from Step 1.
 -   **Process**: This is the core matching script. It iterates through each row of the interaction data. Using the character index and a small window of surrounding text provided in the gaze data, it finds the corresponding LLM response text in `query_data.json`. Each row is then annotated with the matched `query_id`. For non-standard entries like when the user isn't looking at the screen or when they look at our experimentally provided prompt(instructing them how to perform their tasks), I used clearly defined query_ids like -1 and -2 which don't occur in the true dataset and additional boolean flags to properly convey this binary information for better model training.
--   **Output**: The script generates new annotated CSV files with the suffix `-query-id-assigned.csv`. These files are placed in the same directory as the input files and contain the original data plus additional columns for analysis.
+-   **Output**: The script generates new annotated CSV files with the suffix `-query_id_assigned.csv`. These files are placed in the same directory as the input files and contain the original data plus additional columns for analysis.
 
 ---
 
 ## Final Output Schema
 
-The final `-query-id-assigned.csv` files contain the following columns:
+The final `-query_id_assigned.csv` files contain the following columns:
 
 | Column Name            | Description                                                                                              | Data Type |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- | --------- |
@@ -61,6 +61,45 @@ The final `-query-id-assigned.csv` files contain the following columns:
 | `query_id`             | The ID of the query the user was viewing.                                                                | integer   |
 | `is_experimental_text` | A boolean flag that is `true` if the user was looking at the static instructional prompt.                | boolean   |
 | `is_not_looking`       | A boolean flag that is `true` if the user's gaze was off-screen (typically at coordinates -1, -1).         | boolean   |
+
+---
+
+## Pairwise Feature Engineering Pipeline
+
+After completing the core data processing pipeline, the project includes a specialized **pairwise feature engineering pipeline** located in `src/pairwise/` for predicting user preferences between competing LLM responses.
+
+### Overview
+
+-   **Scripts**: `step-0-feature_eng_pipeline.py`, `step-1-analyze_results.py`
+-   **Objective**: Extract behavioral features from user gaze and mouse tracking data to predict which of two LLM responses a user prefers
+-   **Output**: A single consolidated CSV file (`extracted_features.csv`) with one row per pairwise comparison
+
+### Feature Categories
+
+The pipeline extracts **426 total features** per pairwise comparison:
+
+#### Core Behavioral Features (8 features per response = 16 total)
+- **Active Engagement Ratio**: Proportion of time user actively engaged with response
+- **Normalized Average Character Position**: Mean reading position relative to response length
+- **Reading Completion Ratio**: How far through the response the user read
+- **Normalized Character Position Variance**: Variability in reading positions
+
+*Extracted separately for gaze and mouse modalities for both Response A and Response B*
+
+#### Temporal Windowing Features (400 features)
+- **Gaze Windows**: 100 time-based segments tracking average normalized character position over time for each response
+- **Mouse Windows**: 100 time-based segments tracking average normalized character position over time for each response
+
+#### Metadata Features (10 features)
+- Response lengths, data point counts, query/user/task identifiers
+
+### Target Variables
+
+## Pairwise Data
+For now the pipeline predicts a single preference metric:
+- **Binary Preference**: Which response the user preferred (0 = Response A, 1 = Response B)
+
+In the future, the pipeline may also predict other preference metrics, particularly for point-wise comparisons.
 
 ---
 
@@ -79,6 +118,10 @@ The final `-query-id-assigned.csv` files contain the following columns:
 
     # Step 2: Match gaze data to queries and generate annotated files
     python step-2-match-gaze-queries.py
+
+    # Step 3: Extract pairwise behavioral features
+    python src/pairwise/step-0-feature_eng_pipeline.py
     ```
 
-4.  The final, annotated data will be available as `*-query-id-assigned.csv` files within their original subdirectories.
+4.  The final, annotated data will be available as `*-query_id_assigned.csv` files within their original subdirectories.
+5.  Pairwise features for preference prediction will be in `extracted_features.csv`
