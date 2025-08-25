@@ -129,8 +129,8 @@ for src in BASE_DIR.rglob("rel_*.csv"):
     # ----------------------------------------------------------------------- #
     # WRITE NEW FILE (do NOT overwrite original)
     # ----------------------------------------------------------------------- #
-    dst = src.with_name(f"{src.stem}-query-id-assigned.csv")
+    dst = src.with_name(f"{src.stem}_query_id_assigned.csv")
     with dst.open("w", newline="", encoding="utf-8") as fh:
         csv.writer(fh).writerows(out_rows)
 
-print("Finished: new files suffixed with '-query-id-assigned' created.")
+print("Finished: new files suffixed with '_query_id_assigned' created.")
