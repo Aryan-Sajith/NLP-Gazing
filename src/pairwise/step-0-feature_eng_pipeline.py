@@ -301,6 +301,8 @@ class FeatureExtractionPipeline:
             pairwise_features['user_query'] = query_data['user_query']
             pairwise_features['llm_name_1'] = query_data.get('llm_name_1', '')
             pairwise_features['llm_name_2'] = query_data.get('llm_name_2', '')
+            pairwise_features['llm_response_1'] = query_data.get('llm_response_1', '')
+            pairwise_features['llm_response_2'] = query_data.get('llm_response_2', '')
             
             # Add target variables
             try:
@@ -336,7 +338,8 @@ class FeatureExtractionPipeline:
         """Generate CSV headers for the feature vector"""
         headers = [
             # Metadata
-            'query_id', 'user_id', 'task_id', 'user_query', 'llm_name_1', 'llm_name_2',
+            'query_id', 'user_id', 'task_id', 'user_query', 'llm_name_1', 'llm_name_2', 
+            'llm_response_1', 'llm_response_2',
             
             # Target variables
             'likert_1', 'likert_2', 'preference', 'normalized_likert_1', 'normalized_likert_2', 'binary_preference',
