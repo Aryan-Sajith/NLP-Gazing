@@ -143,7 +143,7 @@ In the future, the pipeline may also predict other preference metrics, particula
 0. Note: Timezone is now consistent GMT across all timestamps so we skip step 0: timezone fixes.
 1.  Place all raw user data (e.g., `P1/Task1/rel_gaze.csv`) into a main data directory (e.g., `to-fix-data/`).
 2.  Place the master query log (`full_query_logs_table.csv`) in the project's root directory.
-3.  Execute the scripts in order:
+3.  Execute the scripts in order (Note: Not all necessary flags are shown and exact commands should be adjusted accordingly):
 
     ```bash
     # Step 0: Fix the raw CSV files
