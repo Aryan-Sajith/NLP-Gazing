@@ -4,12 +4,11 @@
 
 The main goal of this project is to determine if user usage metrics(like gazing, mouse movements, and such) can be utilized to better predict user preferences for LLM outputs.
 
-
-
 For the first phase of this project I developed a set of scripts to process raw user interaction data (gaze and mouse movements) and align it with corresponding Large Language Model (LLM) query-response logs. The goal is to produce a clean, annotated dataset where each moment of user gaze is mapped to a specific query they were viewing.
 
-The user metrics and query data processing and fusion pipeline is broken down into three main steps:
+The user metrics and query data processing and fusion pipeline:
 
+0.  **(Optional) Timezone Fixing**: Was used before to fix timezones across database entries to follow a consistent GMT-timezone as opposed to varying local timestamps.
 1.  **Initial Data Formatting**: Cleans and corrects raw, malformed CSV interaction files.
 2.  **Query Extraction**: Parses a master log of all LLM queries and organizes them into a structured JSON file.
 3.  **Gaze-Query Matching**: Annotates the cleaned interaction data with query IDs by matching the text users were looking at with the text from the query logs.
@@ -18,7 +17,17 @@ The user metrics and query data processing and fusion pipeline is broken down in
 
 ## Data Processing Pipeline
 
-### Step 0: Initial Data Formatting
+### Step 0: (Optional) Timezone Fixes
+- **Note:** This was utilized when database timestamps had varying local timezones and had to be fixed. Now, the database and raw user gazing data should have entries within a consistent GMT timezone, so this phase should be unecessary.
+- **Scripts**: `fix-timezone/`
+- **Input**: Raw database files obtained from our online data (e.g., `query_logs_table`) and stored in csv format in some directory (e.g., `to-fix-data/`). These files have timezone inconsistency issues.
+- **Process**: The script uses the `user_timezones.json` file to unify all timestamp information into the GMT format for timezone consistency.
+- **Usage**:
+  ```bash
+  python gmt-timezone-converter.py
+  ```
+
+### Step 1: Initial Data Formatting
 
 -   **Script**: `step-0-data-format.py`
 -   **Input**: Raw `rel_*.csv` files located in a specified directory (e.g., `to-fix-data/`). These files often have formatting errors where text containing commas has been split across multiple columns.
@@ -28,14 +37,14 @@ The user metrics and query data processing and fusion pipeline is broken down in
     python step-0-data-format.py <path_to_data_directory>
     ```
 
-### Step 1: Extracting Query Logs
+### Step 2: Extracting Query Logs
 
 -   **Script**: `step-1-extract-queries.py`
 -   **Input**: A master CSV log file containing all user queries and LLM responses (`full_query_logs_table.csv`). This helps structurally organize and efficiently access the associated queries and metadata associated with each user and task combination without having to re-read our original query logs table.
 -   **Process**: This script reads the master log and extracts all relevant fields for each query (`user_id`, `task_id`, `query_id`, `user_query`, `llm_response_1`, `llm_response_2`, and `query_timestamp`). It then organizes this information into a structured JSON file, grouped by user and task, and sorted by timestamp.
 -   **Output**: `query_data.json`
 
-### Step 2: Matching Gaze Data with Queries
+### Step 3: Matching Gaze Data with Queries
 
 -   **Script**: `step-2-match-gaze-queries.py`
 -   **Input**:
@@ -103,8 +112,8 @@ In the future, the pipeline may also predict other preference metrics, particula
 
 ---
 
-## How to Run the Pipeline
-
+## How to Run the Pipeline:
+0. Note: Timezone is now consistent GMT across all timestamps so we skip step 0: timezone fixes.
 1.  Place all raw user data (e.g., `P1/Task1/rel_gaze.csv`) into a main data directory (e.g., `to-fix-data/`).
 2.  Place the master query log (`full_query_logs_table.csv`) in the project's root directory.
 3.  Execute the scripts in order:
