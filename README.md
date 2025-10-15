@@ -4,6 +4,33 @@
 
 The main goal of this project is to determine if user usage metrics(like gazing, mouse movements, and such) can be utilized to better predict user preferences for LLM outputs.
 
+## Pre-Experiment: Text-Only Baseline
+
+As a first step, we evaluated whether user preferences for LLM outputs could be predicted using only the text of the query and response.
+
+- **Model**: 
+Fine-tuned distilbert-base-uncased for regression (predicting a 1–5 Likert rating).
+
+- **Input**: 
+Concatenated query and response text; no user behavior data used.
+
+- **Evaluation**: 
+5-fold cross-validation.
+
+- **Results**:
+
+| Metric        | Value (Mean ± Std) |
+|---------------|------------------|
+| MSE           | 2.44 ± 1.14      |
+| MAE           | 1.45 ± 0.39      |
+| Pearson R     | 0.61 ± 0.35      |
+| Accuracy (±10)| 13% ± 12%     |
+| R²            | -6.53            |
+
+Takeaway: Text alone, especially with a small dataset, is insufficient to predict user preferences, motivating the use of behavioral metrics in the main experiment. Consider the extremely low and subrandom accuracy(around 13 - 25%) of the model, which highlights the need for additional data in terms of both quantity and quality.
+
+## Main Experiment: Incorporating User Interaction Data
+
 For the first phase of this project I developed a set of scripts to process raw user interaction data (gaze and mouse movements) and align it with corresponding Large Language Model (LLM) query-response logs. The goal is to produce a clean, annotated dataset where each moment of user gaze is mapped to a specific query they were viewing.
 
 The user metrics and query data processing and fusion pipeline:
