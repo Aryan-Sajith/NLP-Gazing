@@ -86,7 +86,7 @@ class FeatureExtractionPipeline:
         return pairwise_queries
     
     def load_behavioral_data(self, file_path: Path, query_id: int) -> List[Dict]:
-        """Load and filter behavioral data for a specific query"""
+        """Load ALL behavioral data for a specific query (including looking away periods)"""
         data = []
         try:
             if not file_path.exists():
@@ -95,19 +95,24 @@ class FeatureExtractionPipeline:
             with open(file_path, 'r') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    # Filter for valid data points and specific query
-                    if (row.get('query_id') == str(query_id) and 
-                        row.get('x') != '-1' and row.get('y') != '-1' and
-                        row.get('centre_idx') and row['centre_idx'].strip()):
-                        
+                    # Include ALL rows for this query, even -1,-1 (looking away)
+                    if row.get('query_id') == str(query_id):
                         try:
+                            # Handle -1,-1 rows (user looking away) specially
+                            x = float(row['x']) if row.get('x') != '-1' else -1
+                            y = float(row['y']) if row.get('y') != '-1' else -1
+                            centre_idx = int(row['centre_idx']) if (row.get('centre_idx') and 
+                                                                     row['centre_idx'].strip() and 
+                                                                     row['centre_idx'] != '-1') else -1
+                            
                             data.append({
-                                'x': float(row['x']),
-                                'y': float(row['y']),
+                                'x': x,
+                                'y': y,
                                 'window': row.get('window', ''),
-                                'centre_idx': int(row['centre_idx']),
+                                'centre_idx': centre_idx,
                                 'rel_ts': float(row['rel_ts']),
                                 'abs_ts': float(row['abs_ts']),
+                                'is_looking_at_text': x != -1 and y != -1 and centre_idx != -1,
                                 'is_experimental_text': row.get('is_experimental_text', '').lower() == 'true'
                             })
                         except (ValueError, KeyError):
@@ -123,10 +128,11 @@ class FeatureExtractionPipeline:
         return len(response_text) if response_text else 0
     
     def extract_core_features(self, data: List[Dict], response_length: int) -> Dict:
-        """Extract the 5 core features for a single modality"""
+        """Extract dual engagement metrics for a single modality"""
         if not data or response_length == 0:
             return {
-                'active_engagement_ratio': 0.0,
+                'focused_engagement_ratio': 0.0,
+                'overall_attention_ratio': 0.0,
                 'normalized_avg_char_position': 0.0,
                 'reading_completion_ratio': 0.0,
                 'normalized_char_position_variance': 0.0,
@@ -136,21 +142,48 @@ class FeatureExtractionPipeline:
         # Sort data by timestamp for temporal analysis
         data = sorted(data, key=lambda x: x['rel_ts'])
         
-        # Extract timestamps and character positions
-        timestamps = [d['rel_ts'] for d in data]
-        char_positions = [d['centre_idx'] for d in data]
+        # Separate looking vs not-looking data
+        looking_data = [d for d in data if d['is_looking_at_text']]
         
-        # Calculate session duration
-        total_session_time = max(timestamps) - min(timestamps) if len(timestamps) > 1 else 0
+        # Extract timestamps
+        all_timestamps = [d['rel_ts'] for d in data]
+        looking_timestamps = [d['rel_ts'] for d in looking_data]
         
-        # 1. Active Engagement Ratio
-        # Estimate active time based on data point frequency
-        if len(timestamps) > 1:
-            avg_interval = total_session_time / (len(timestamps) - 1)
-            active_time = len(data) * avg_interval
-            active_engagement_ratio = min(1.0, active_time / total_session_time) if total_session_time > 0 else 0
+        # Calculate total session duration
+        total_session_time = max(all_timestamps) - min(all_timestamps) if len(all_timestamps) > 1 else 0
+        
+        # 1A. Focused Engagement Ratio (gaps while looking at text)
+        # Measures: "When looking at the text, how continuously did they read?"
+        if len(looking_timestamps) > 1:
+            inactivity_threshold = 2000.0  # milliseconds
+            intervals = [looking_timestamps[i+1] - looking_timestamps[i] for i in range(len(looking_timestamps) - 1)]
+            active_time = sum(min(interval, inactivity_threshold) for interval in intervals)
+            looking_session_time = max(looking_timestamps) - min(looking_timestamps)
+            focused_engagement_ratio = active_time / looking_session_time if looking_session_time > 0 else 0
         else:
-            active_engagement_ratio = 0.0
+            focused_engagement_ratio = 0.0
+        
+        # 1B. Overall Attention Ratio
+        # Measures: "What % of total session time was spent looking at the text?"
+        if total_session_time > 0:
+            # Calculate time spent looking using eye tracker sampling rate
+            # Approximate: (number of looking samples / total samples) * total time
+            overall_attention_ratio = len(looking_data) / len(data)
+        else:
+            overall_attention_ratio = 0.0
+        
+        # For remaining features, only use looking_data (when user was engaged)
+        if not looking_data:
+            return {
+                'focused_engagement_ratio': focused_engagement_ratio,
+                'overall_attention_ratio': overall_attention_ratio,
+                'normalized_avg_char_position': 0.0,
+                'reading_completion_ratio': 0.0,
+                'normalized_char_position_variance': 0.0,
+                'windowed_features': [0.0] * 100
+            }
+        
+        char_positions = [d['centre_idx'] for d in looking_data]
         
         # 2. Normalized Average Character Position
         normalized_positions = [pos / response_length for pos in char_positions]
@@ -164,10 +197,11 @@ class FeatureExtractionPipeline:
         normalized_char_position_variance = statistics.variance(normalized_positions) if len(normalized_positions) > 1 else 0
         
         # 5. Normalized Character Sequence Windowing (100 segments)
-        windowed_features = self.calculate_windowed_features(data, response_length, 100)
+        windowed_features = self.calculate_windowed_features(looking_data, response_length, 100)
         
         return {
-            'active_engagement_ratio': active_engagement_ratio,
+            'focused_engagement_ratio': focused_engagement_ratio,
+            'overall_attention_ratio': overall_attention_ratio,
             'normalized_avg_char_position': normalized_avg_char_position,
             'reading_completion_ratio': reading_completion_ratio,
             'normalized_char_position_variance': normalized_char_position_variance,
@@ -238,13 +272,17 @@ class FeatureExtractionPipeline:
             # Combine features with modality prefixes
             combined_features = {}
             
-            # Basic features (4 per modality = 8 total)
-            combined_features['gaze_active_engagement_ratio'] = gaze_features['active_engagement_ratio']
+            # Engagement features (2 per modality = 4 total)
+            combined_features['gaze_focused_engagement_ratio'] = gaze_features['focused_engagement_ratio']
+            combined_features['gaze_overall_attention_ratio'] = gaze_features['overall_attention_ratio']
+            combined_features['mouse_focused_engagement_ratio'] = mouse_features['focused_engagement_ratio']
+            combined_features['mouse_overall_attention_ratio'] = mouse_features['overall_attention_ratio']
+            
+            # Other basic features (3 per modality = 6 total)
             combined_features['gaze_normalized_avg_char_position'] = gaze_features['normalized_avg_char_position']
             combined_features['gaze_reading_completion_ratio'] = gaze_features['reading_completion_ratio']
             combined_features['gaze_normalized_char_position_variance'] = gaze_features['normalized_char_position_variance']
             
-            combined_features['mouse_active_engagement_ratio'] = mouse_features['active_engagement_ratio']
             combined_features['mouse_normalized_avg_char_position'] = mouse_features['normalized_avg_char_position']
             combined_features['mouse_reading_completion_ratio'] = mouse_features['reading_completion_ratio']
             combined_features['mouse_normalized_char_position_variance'] = mouse_features['normalized_char_position_variance']
@@ -344,17 +382,25 @@ class FeatureExtractionPipeline:
             # Target variables
             'likert_1', 'likert_2', 'preference', 'normalized_likert_1', 'normalized_likert_2', 'binary_preference',
             
-            # Response A basic features
-            'response_A_gaze_active_engagement_ratio', 'response_A_gaze_normalized_avg_char_position',
+            # Response A engagement features (2 per modality)
+            'response_A_gaze_focused_engagement_ratio', 'response_A_gaze_overall_attention_ratio',
+            'response_A_mouse_focused_engagement_ratio', 'response_A_mouse_overall_attention_ratio',
+            
+            # Response A other basic features
+            'response_A_gaze_normalized_avg_char_position',
             'response_A_gaze_reading_completion_ratio', 'response_A_gaze_normalized_char_position_variance',
-            'response_A_mouse_active_engagement_ratio', 'response_A_mouse_normalized_avg_char_position',
+            'response_A_mouse_normalized_avg_char_position',
             'response_A_mouse_reading_completion_ratio', 'response_A_mouse_normalized_char_position_variance',
             'response_A_response_length', 'response_A_gaze_data_points', 'response_A_mouse_data_points',
             
-            # Response B basic features
-            'response_B_gaze_active_engagement_ratio', 'response_B_gaze_normalized_avg_char_position',
+            # Response B engagement features (2 per modality)
+            'response_B_gaze_focused_engagement_ratio', 'response_B_gaze_overall_attention_ratio',
+            'response_B_mouse_focused_engagement_ratio', 'response_B_mouse_overall_attention_ratio',
+            
+            # Response B other basic features
+            'response_B_gaze_normalized_avg_char_position',
             'response_B_gaze_reading_completion_ratio', 'response_B_gaze_normalized_char_position_variance',
-            'response_B_mouse_active_engagement_ratio', 'response_B_mouse_normalized_avg_char_position',
+            'response_B_mouse_normalized_avg_char_position',
             'response_B_mouse_reading_completion_ratio', 'response_B_mouse_normalized_char_position_variance',
             'response_B_response_length', 'response_B_gaze_data_points', 'response_B_mouse_data_points'
         ]
@@ -421,9 +467,9 @@ def main():
     """Main function to run the feature extraction pipeline"""
     
     # Configuration
-    data_dir = "/Users/aryan-sajith/Downloads/NLP-Gaze-Feature-Eng/small-scale-test/data"
-    query_logs_file = "/Users/aryan-sajith/Downloads/NLP-Gaze-Feature-Eng/small-scale-test/full_query_logs_table.csv"
-    output_csv = "/Users/aryan-sajith/Downloads/NLP-Gaze-Feature-Eng/small-scale-test/extracted_features.csv"
+    data_dir = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/user_behavior"
+    query_logs_file = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/full_query_logs_table.csv"
+    output_csv = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/extracted_features.csv"
 
     # Initialize and run pipeline
     pipeline = FeatureExtractionPipeline(data_dir, query_logs_file, output_csv)

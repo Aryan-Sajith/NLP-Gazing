@@ -5,14 +5,27 @@ Extracts query data from the LLM logs(query logs table) and creates a structured
 
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def parse_timestamp(timestamp_str):
-    """Parse timestamp from format '2025-04-23 13:31:31' to Unix timestamp."""
+    """
+    Parse UTC timestamp from format '2025-04-23 13:31:31' to Unix timestamp.
+    
+    NOTE: The query_timestamp field in full_query_logs_table.csv is in UTC.
+    We explicitly mark it as UTC to ensure correct conversion regardless of
+    the system timezone where this script runs.
+    
+    Args:
+        timestamp_str: Timestamp string in format 'YYYY-MM-DD HH:MM:SS'
+    
+    Returns:
+        Unix timestamp in milliseconds, or None if parsing fails
+    """
     try:
         dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-        return int(dt.timestamp() * 1000)
+        dt_utc = dt.replace(tzinfo=timezone.utc)  # Explicitly mark as UTC
+        return int(dt_utc.timestamp() * 1000)
     except Exception as e:
         print(f"Error parsing timestamp {timestamp_str}: {e}")
         return None
@@ -48,7 +61,7 @@ def extract_query_data(csv_file_path, output_json_path):
             
             for row in reader:
                 user_id = row['user_id']
-                task_id = int(row['task_id'])
+                task_id = row['task_id']  # Keep as string to match directory names
                 query_id = int(row['query_ID'])
                 user_query = row['user_query']
                 llm_response_1 = row['llm_response_1']

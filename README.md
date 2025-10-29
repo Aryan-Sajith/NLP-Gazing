@@ -4,6 +4,36 @@
 
 The main goal of this project is to determine if user usage metrics(like gazing, mouse movements, and such) can be utilized to better predict user preferences for LLM outputs.
 
+## ⚡ Quick Start
+
+```bash
+# IMPORTANT: Skip step-0! It corrupts data.
+
+# Step 1: Extract queries
+python3 src/step-1-extract-queries.py
+
+# Step 2: Match behavioral data to queries
+python3 src/step-2-match-gaze-queries.py
+
+# Step 3: Extract features
+cd src/pairwise && python3 step-0-feature_eng_pipeline.py
+```
+
+## 📁 Required Files and Folder Structure
+
+### Input Files Required:
+1. **`full_query_logs_table.csv`** - Master CSV log file containing all user queries and LLM responses (place in project root)
+2. **User behavioral data** - Raw `rel_*.csv` files (gaze and mouse tracking data)
+
+### Folder Structure:
+- **User data location**: `user_behavior/` - User behavioral data directory
+- Each user has their own subdirectory (e.g., `user_behavior/A1IZ4NX41GKU4X/`)
+- Within each user directory, task-specific CSV files contain the behavioral data
+
+### ⚠️ Important Notes:
+- **Do NOT run `src/step-0-data-format.py`** - it corrupts data
+- Zeros in features are legitimate user behavior, not bugs
+
 ## Pre-Experiment: Text-Only Baseline
 
 As a first step, we evaluated whether user preferences for LLM outputs could be predicted using only the text of the query and response.
@@ -31,54 +61,40 @@ Takeaway: Text alone, especially with a small dataset, is insufficient to predic
 
 ## Main Experiment: Incorporating User Interaction Data
 
-For the first phase of this project I developed a set of scripts to process raw user interaction data (gaze and mouse movements) and align it with corresponding Large Language Model (LLM) query-response logs. The goal is to produce a clean, annotated dataset where each moment of user gaze is mapped to a specific query they were viewing.
+This project processes raw user interaction data (gaze and mouse movements) and aligns it with corresponding Large Language Model (LLM) query-response logs. The goal is to produce a clean, annotated dataset where each moment of user gaze is mapped to a specific query they were viewing, followed by behavioral feature extraction for preference prediction.
 
-The user metrics and query data processing and fusion pipeline:
+The processing pipeline consists of three main steps:
 
-0.  **(Optional) Timezone Fixing**: Was used before to fix timezones across database entries to follow a consistent GMT-timezone as opposed to varying local timestamps.
-1.  **Initial Data Formatting**: Cleans and corrects raw, malformed CSV interaction files.
-2.  **Query Extraction**: Parses a master log of all LLM queries and organizes them into a structured JSON file.
-3.  **Gaze-Query Matching**: Annotates the cleaned interaction data with query IDs by matching the text users were looking at with the text from the query logs.
+1.  **Query Extraction**: Parses a master log of all LLM queries and organizes them into a structured JSON file.
+2.  **Gaze-Query Matching**: Annotates the cleaned interaction data with query IDs by matching the text users were looking at with the text from the query logs.
+3.  **Feature Extraction**: Extracts behavioral features from the annotated data for pairwise preference prediction.
 
 ---
 
 ## Data Processing Pipeline
 
-### Step 0: (Optional) Timezone Fixes
-- **Note:** This was utilized when database timestamps had varying local timezones and had to be fixed. Now, the database and raw user gazing data should have entries within a consistent GMT timezone, so this phase should be unecessary.
-- **Scripts**: `fix-timezone/`
-- **Input**: Raw database files obtained from our online data (e.g., `query_logs_table`) and stored in csv format in some directory (e.g., `to-fix-data/`). These files have timezone inconsistency issues.
-- **Process**: The script uses the `user_timezones.json` file to unify all timestamp information into the GMT format for timezone consistency.
-- **Usage**:
-  ```bash
-  python gmt-timezone-converter.py
-  ```
-
-### Step 1: Initial Data Formatting
-
--   **Script**: `step-0-data-format.py`
--   **Input**: Raw `rel_*.csv` files located in a specified directory (e.g., `to-fix-data/`). These files often have formatting errors where text containing commas has been split across multiple columns.
--   **Process**: The script recursively finds all relevant CSV files, corrects the column structure by rejoining text that was improperly split(because commas were not escaped), and properly escapes quotes(since I surround all text in quotes to begin with). The corrected files overwrite the originals in place.
--   **Usage**:
-    ```bash
-    python step-0-data-format.py <path_to_data_directory>
-    ```
-
-### Step 2: Extracting Query Logs
+### Step 1: Extracting Query Logs
 
 -   **Script**: `step-1-extract-queries.py`
 -   **Input**: A master CSV log file containing all user queries and LLM responses (`full_query_logs_table.csv`). This helps structurally organize and efficiently access the associated queries and metadata associated with each user and task combination without having to re-read our original query logs table.
 -   **Process**: This script reads the master log and extracts all relevant fields for each query (`user_id`, `task_id`, `query_id`, `user_query`, `llm_response_1`, `llm_response_2`, and `query_timestamp`). It then organizes this information into a structured JSON file, grouped by user and task, and sorted by timestamp.
 -   **Output**: `query_data.json`
 
-### Step 3: Matching Gaze Data with Queries
+### Step 2: Matching Gaze Data with Queries
 
 -   **Script**: `step-2-match-gaze-queries.py`
 -   **Input**:
-    1.  The formatted `rel_*.csv` files from Step 0.
+    1.  The original `rel_*.csv` files from `user_behavior/`.
     2.  The `query_data.json` file from Step 1.
 -   **Process**: This is the core matching script. It iterates through each row of the interaction data. Using the character index and a small window of surrounding text provided in the gaze data, it finds the corresponding LLM response text in `query_data.json`. Each row is then annotated with the matched `query_id`. For non-standard entries like when the user isn't looking at the screen or when they look at our experimentally provided prompt(instructing them how to perform their tasks), I used clearly defined query_ids like -1 and -2 which don't occur in the true dataset and additional boolean flags to properly convey this binary information for better model training.
 -   **Output**: The script generates new annotated CSV files with the suffix `-query_id_assigned.csv`. These files are placed in the same directory as the input files and contain the original data plus additional columns for analysis.
+
+### Step 3: Feature Extraction
+
+-   **Script**: `src/pairwise/step-0-feature_eng_pipeline.py`
+-   **Input**: The annotated `*-query_id_assigned.csv` files from Step 2
+-   **Process**: Extracts 426 behavioral features per pairwise comparison from user gaze and mouse tracking data
+-   **Output**: `extracted_features.csv` - A consolidated CSV file with one row per pairwise comparison
 
 ---
 
@@ -139,25 +155,22 @@ In the future, the pipeline may also predict other preference metrics, particula
 
 ---
 
-## How to Run the Pipeline:
-0. Note: Timezone is now consistent GMT across all timestamps so we skip step 0: timezone fixes.
-1.  Place all raw user data (e.g., `P1/Task1/rel_gaze.csv`) into a main data directory (e.g., `to-fix-data/`).
-2.  Place the master query log (`full_query_logs_table.csv`) in the project's root directory.
-3.  Execute the scripts in order (Note: Not all necessary flags are shown and exact commands should be adjusted accordingly):
+## How to Run the Pipeline
 
-    ```bash
-    # Step 0: Fix the raw CSV files
-    python step-0-data-format.py to-fix-data/
+```bash
+# Step 1: Extract queries from the master log
+python3 src/step-1-extract-queries.py
 
-    # Step 1: Generate the query data JSON file
-    python step-1-extract-queries.py
+# Step 2: Match gaze data to queries and generate annotated files
+python3 src/step-2-match-gaze-queries.py
 
-    # Step 2: Match gaze data to queries and generate annotated files
-    python step-2-match-gaze-queries.py
+# Step 3: Extract pairwise behavioral features
+cd src/pairwise && python3 step-0-feature_eng_pipeline.py
+```
 
-    # Step 3: Extract pairwise behavioral features
-    python src/pairwise/step-0-feature_eng_pipeline.py
-    ```
+### Output Files:
+- `query_data.json` - Structured query data (from Step 1)
+- `*-query_id_assigned.csv` - Annotated behavioral data files (from Step 2)
+- `extracted_features.csv` - Pairwise features for preference prediction (from Step 3)
 
-4.  The final, annotated data will be available as `*-query_id_assigned.csv` files within their original subdirectories.
-5.  Pairwise features for preference prediction will be in `extracted_features.csv`
+---

@@ -14,7 +14,7 @@ from pathlib import Path
 # --------------------------------------------------------------------------- #
 # CONFIGURATION
 # --------------------------------------------------------------------------- #
-BASE_DIR   = Path("to-fix-data")
+BASE_DIR   = Path("user_behavior")
 QUERY_JSON = Path("query_data.json")
 PROMPT = (
     "After you type your question, please wait patiently. It might take up to 1 "
@@ -24,6 +24,14 @@ PROMPT = (
 NO_GAZE_QUERY_ID = -2  # special value for "not looking at the screen"
 PROMPT_GAZE_QUERY_ID = -1  # special value for "looking at the prompt"
 BASE_QUERY_ID = 0  # default value for query_id if no match is found
+
+# Only process pairwise files (exclude pointwise files)
+PAIRWISE_FILES = [
+    "rel_gaze_one.csv",
+    "rel_gaze_two.csv", 
+    "rel_mouse_left.csv",
+    "rel_mouse_right.csv"
+]
 
 # --------------------------------------------------------------------------- #
 # UTILITIES
@@ -35,10 +43,14 @@ def match_window(msg: str, window: str, raw_idx: int) -> bool:
     We use 15 characters before and after the index to allow for more context to handle edge cases where
     the window might not be exactly at the index due to text formatting or other issues.
     """
+    # Clean both message and window of newlines and carriage returns
+    msg_cleaned = msg.replace('\n', ' ').replace('\r', ' ')
+    window_cleaned = window.replace('\n', ' ').replace('\r', ' ')
+    
     window_length = 15  # characters before and after the index
     start_idx_inclusive = raw_idx - window_length if raw_idx - window_length >= 0 else 0
-    end_idx_exclusive = raw_idx + window_length if raw_idx + window_length < len(msg) else len(msg)
-    return window in msg[start_idx_inclusive:end_idx_exclusive]
+    end_idx_exclusive = raw_idx + window_length if raw_idx + window_length < len(msg_cleaned) else len(msg_cleaned)
+    return window_cleaned in msg_cleaned[start_idx_inclusive:end_idx_exclusive]
 
 # --------------------------------------------------------------------------- #
 # LOAD QUERY DATA
@@ -50,7 +62,11 @@ with QUERY_JSON.open(encoding="utf-8") as fh:
 # MAIN WALK
 # --------------------------------------------------------------------------- #
 for src in BASE_DIR.rglob("rel_*.csv"):
-    # derive user_id / task_id from path:  data/user_id/task_id/file.csv
+    # Only process pairwise files, skip pointwise files
+    if src.name not in PAIRWISE_FILES:
+        continue
+        
+    # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
     try:
         _, user_id, task_id, _ = src.parts[-4:]
     except ValueError:
@@ -76,6 +92,49 @@ for src in BASE_DIR.rglob("rel_*.csv"):
     # read the file
     with src.open(encoding="utf-8") as fh:
         raw_rows = list(csv.reader(fh))
+    
+    # First pass: Build timestamp ranges for each query_id
+    # We'll use this to assign query_ids to not_looking events based on their timestamps
+    query_time_ranges = {}  # {query_id: (min_ts, max_ts)}
+
+    # First pass: Build timestamp ranges for each query_id
+    # We'll use this to assign query_ids to not_looking events based on their timestamps
+    query_time_ranges = {}  # {query_id: (min_ts, max_ts)}
+    
+    # Temporary first pass to find time ranges
+    for row in raw_rows:
+        if len(row) == 7:
+            x, y, window, idx_str, rel_ts_str, _, abs_ts = row
+        elif len(row) == 6:
+            x, y, window, idx_str, rel_ts_str, abs_ts = row
+        else:
+            continue
+        
+        try:
+            x_f, y_f = float(x), float(y)
+            rel_ts = float(rel_ts_str)
+        except (ValueError, TypeError):
+            continue
+        
+        try:
+            idx_i = int(float(idx_str)) if idx_str.strip() else -1
+        except (ValueError, TypeError):
+            idx_i = -1
+        
+        window = window.strip()
+        is_not_looking = x_f == -1 and y_f == -1
+        
+        # Only process looking events for time range calculation
+        if not is_not_looking:
+            # Check if this matches any query
+            for qid, text in responses:
+                if match_window(text, window, idx_i):
+                    if qid not in query_time_ranges:
+                        query_time_ranges[qid] = [rel_ts, rel_ts]
+                    else:
+                        query_time_ranges[qid][0] = min(query_time_ranges[qid][0], rel_ts)
+                        query_time_ranges[qid][1] = max(query_time_ranges[qid][1], rel_ts)
+                    break
 
     # process rows
     out_rows = [
@@ -92,17 +151,50 @@ for src in BASE_DIR.rglob("rel_*.csv"):
         ]
     ]
 
-    for x, y, window, idx, rel_ts, abs_ts, *rest in raw_rows:
-        x_f, y_f = float(x), float(y)
-        idx_i = int(idx) if idx else -1
-        window = window or ""
+    for row in raw_rows:
+        # csv.reader handles CSV quoting properly
+        # Some files have 6 fields: x, y, window, idx, rel_ts, abs_ts
+        # Some files have 7 fields: x, y, window, idx, rel_ts, unknown, abs_ts
+        
+        if len(row) == 7:
+            x, y, window, idx_str, rel_ts, _, abs_ts = row
+        elif len(row) == 6:
+            x, y, window, idx_str, rel_ts, abs_ts = row
+        else:
+            # Skip invalid rows (header or malformed)
+            continue
+        
+        # Parse numeric values
+        try:
+            x_f, y_f = float(x), float(y)
+        except (ValueError, TypeError):
+            continue
+        
+        # Parse index
+        try:
+            idx_i = int(float(idx_str)) if idx_str.strip() else -1
+        except (ValueError, TypeError):
+            idx_i = -1
+        
+        # Clean window text
+        window = window.strip()
 
         is_not_looking = x_f == -1 and y_f == -1
         is_exp_text = False
         query_id = BASE_QUERY_ID # default value if no match is found
 
         if is_not_looking:
-            query_id = NO_GAZE_QUERY_ID # special value for "not looking at the screen"
+            # For not_looking events, assign query_id based on timestamp
+            # Check which query's time range this timestamp falls into
+            query_id = NO_GAZE_QUERY_ID  # default to -2 if not in any range
+            try:
+                rel_ts_float = float(rel_ts)
+                for qid, (min_ts, max_ts) in query_time_ranges.items():
+                    if min_ts <= rel_ts_float <= max_ts:
+                        query_id = qid
+                        break
+            except (ValueError, TypeError):
+                pass
         elif match_window(PROMPT, window, idx_i):
             query_id = PROMPT_GAZE_QUERY_ID # special value for "looking at the prompt"
             is_exp_text = True
@@ -117,7 +209,7 @@ for src in BASE_DIR.rglob("rel_*.csv"):
                 x,
                 y,
                 window,
-                idx,
+                idx_i,
                 rel_ts,
                 abs_ts,
                 query_id,
