@@ -10,6 +10,7 @@ The original files are left untouched.
 import csv
 import json
 from pathlib import Path
+from collections import defaultdict
 
 # --------------------------------------------------------------------------- #
 # CONFIGURATION
@@ -77,20 +78,9 @@ for src in BASE_DIR.rglob("rel_*.csv"):
     with src.open(encoding="utf-8") as fh:
         raw_rows = list(csv.reader(fh))
 
-    # process rows
-    out_rows = [
-        [
-            "x",
-            "y",
-            "window",
-            "centre_idx",
-            "rel_ts",
-            "abs_ts",
-            "query_id",
-            "is_experimental_text",
-            "is_not_looking",
-        ]
-    ]
+    # processes rows
+    processed_rows = []
+    query_stats = defaultdict(lambda: {'total': 0, 'response_looks': 0})
 
     for x, y, window, idx, rel_ts, abs_ts, *rest in raw_rows:
         x_f, y_f = float(x), float(y)
@@ -112,17 +102,49 @@ for src in BASE_DIR.rglob("rel_*.csv"):
                     query_id = qid
                     break
 
+        # checks if user is looking at the response
+        is_looking_at_response = query_id not in [PROMPT_GAZE_QUERY_ID, NO_GAZE_QUERY_ID, BASE_QUERY_ID] and not is_not_looking
+
+        # updates dict used for response_gaze_percentage
+        query_stats[query_id]['total'] += 1
+        if is_looking_at_response:
+            query_stats[query_id]['response_looks']
+
+        processed_rows.append({
+            'data': [x, y, window, idx, rel_ts, abs_ts],
+            'query_id': query_id,
+            'is_exp_text': str(is_exp_text).lower(),
+            'is_not_looking': str(is_not_looking).lower(),   
+        })
+
+    # dict of actual response_gaze_percentages based off of query_stats
+    query_percentages = { query_id : stats['response_looks'] / stats['total'] if stats['total'] > 0 else 0.0 for query_id, stats in query_stats.items()}
+    
+    # builds rows
+    out_rows = [
+        [
+            "x",
+            "y",
+            "window",
+            "centre_idx",
+            "rel_ts",
+            "abs_ts",
+            "query_id",
+            "is_experimental_text",
+            "is_not_looking",
+            "response_gaze_percentage",
+        ]
+    ]
+
+    for row in processed_rows:
+        q_id = row['query_id']
+        percentage = query_percentages[q_id]
+
         out_rows.append(
-            [
-                x,
-                y,
-                window,
-                idx,
-                rel_ts,
-                abs_ts,
-                query_id,
-                str(is_exp_text).lower(),
-                str(is_not_looking).lower(),
+            row['data'] + [
+                row['is_exp_text'], 
+                row['is_not_looking'], 
+                f"{percentage:.4f}"
             ]
         )
 
