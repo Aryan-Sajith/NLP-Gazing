@@ -1,6 +1,20 @@
 """
 CSV Data Formatter Script
 
+⚠️ WARNING: DO NOT USE THIS SCRIPT! ⚠️
+
+This script was found to CORRUPT data rather than fix it.
+The original CSV files from user_behavior_org are already properly formatted.
+
+This script uses naive string splitting that breaks CSV quoting rules.
+Running it will corrupt properly-formatted CSV files.
+
+SOLUTION: Skip this step entirely. Use the original files directly.
+See PIPELINE_INSTRUCTIONS.md for correct pipeline execution.
+
+---
+
+Original description (DO NOT USE):
 This script recursively finds and processes CSV files in a directory,
 fixing formatting issues and replacing the original files.
 """
@@ -108,24 +122,25 @@ def main():
     parser = argparse.ArgumentParser(
         description='Recursively process and replace CSV files with formatted versions'
     )
-    default_directory = "to-fix-data/"
+    default_directory = "user_behavior/"
+    # Only process pairwise files - exclude pointwise files (rel_gaze.csv, rel_mouse.csv)
     default_filenames = [
         'rel_gaze_one.csv', 
         'rel_gaze_two.csv', 
         'rel_mouse_left.csv', 
-        'rel_mouse_right.csv', 
-        'rel_gaze.csv', 
-        'rel_mouse.csv'
+        'rel_mouse_right.csv'
     ]
     parser.add_argument('directory', nargs='?',
                        help='Directory to search recursively',
                        default=default_directory)
     parser.add_argument('--filenames', '-f', nargs='+', 
                        default=default_filenames,
-                       help='Filenames to process')
+                       help='Filenames to process (default: pairwise files only)')
     
     args = parser.parse_args()
     
+    print(f"Processing pairwise data only (excluding pointwise files)")
+    print(f"Target files: {args.filenames}")
     find_and_process_files(args.directory, args.filenames)
 
 if __name__ == "__main__":

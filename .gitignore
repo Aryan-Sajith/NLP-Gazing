@@ -208,3 +208,15 @@ __marimo__/
 
 # Ignore local user gazing data files
 data/
+user_behavior/
+user_behavior_org/
+data_dump/
+
+# Ignore CSV files
+*.csv
+
+# Ignore Json files
+*.json
+
+# Ignore pipeline instructions
+PIPELINE_INSTRUCTIONS.md
