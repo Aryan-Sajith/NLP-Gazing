@@ -200,7 +200,7 @@ for src in BASE_DIR.rglob("rel_*.csv"):
         # updates dict used for response_gaze_percentage
         query_stats[query_id]['total'] += 1
         if is_looking_at_response:
-            query_stats[query_id]['response_looks']
+            query_stats[query_id]['response_looks'] += 1
 
         processed_rows.append({
             'data': [x, y, window, idx_str, rel_ts, abs_ts],
