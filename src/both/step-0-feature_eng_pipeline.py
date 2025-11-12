@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Unified Feature Extraction Pipeline for LLM Response Preference Prediction
+Combined Pairwise and Pointwise Feature Extraction Pipeline
 
-This script processes multiple user/task combinations to extract behavioral features
-from gaze and mouse tracking data for pairwise LLM response comparison.
-Outputs a single CSV file with one row per valid pairwise comparison.
+This script processes both pairwise and pointwise user/task combinations to extract 
+behavioral features from gaze and mouse tracking data for LLM response evaluation.
+Outputs a single CSV file with both types of comparisons.
 
-Author: Generated for batch processing of user/task combinations
+Author: Generated for combined pairwise and pointwise processing
 """
 
 import csv
@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import statistics
 
-class FeatureExtractionPipeline:
-    """Extract behavioral features for multiple user/task combinations"""
+class CombinedFeatureExtractionPipeline:
+    """Extract behavioral features for both pairwise and pointwise comparisons"""
     
     def __init__(self, data_dir: str, query_logs_file: str, output_csv: str):
         self.data_dir = Path(data_dir)
@@ -37,8 +37,8 @@ class FeatureExtractionPipeline:
             print(f"Error loading query logs: {e}")
             self.query_data_cache = {}
     
-    def find_user_task_combinations(self) -> List[Tuple[str, str]]:
-        """Discover all user/task combinations in the data directory"""
+    def find_user_task_combinations(self) -> List[Tuple[str, str, str]]:
+        """Discover all user/task combinations and their types (pairwise/pointwise)"""
         combinations = []
         try:
             for user_dir in self.data_dir.iterdir():
@@ -48,42 +48,64 @@ class FeatureExtractionPipeline:
                     for task_dir in user_dir.iterdir():
                         if task_dir.is_dir():
                             task_id = task_dir.name
-                            # Check if this combination has the required files
-                            if self.has_required_files(user_id, task_id):
-                                combinations.append((user_id, task_id))
+                            comparison_type = self.detect_comparison_type(user_id, task_id)
+                            if comparison_type:
+                                combinations.append((user_id, task_id, comparison_type))
             print(f"Found {len(combinations)} user/task combinations with required files")
+            pairwise_count = sum(1 for _, _, t in combinations if t == 'pairwise')
+            pointwise_count = sum(1 for _, _, t in combinations if t == 'pointwise')
+            print(f"  - Pairwise: {pairwise_count}")
+            print(f"  - Pointwise: {pointwise_count}")
             return combinations
         except Exception as e:
             print(f"Error discovering user/task combinations: {e}")
             return []
     
-    def has_required_files(self, user_id: str, task_id: str) -> bool:
-        """Check if a user/task combination has the required behavioral data files"""
+    def detect_comparison_type(self, user_id: str, task_id: str) -> Optional[str]:
+        """Detect if this is a pairwise or pointwise task based on files present"""
         task_path = self.data_dir / user_id / task_id
-        required_files = [
+        
+        # Check for pairwise files (4 files)
+        pairwise_files = [
             "rel_gaze_one_query_id_assigned.csv",
-            "rel_gaze_two_query_id_assigned.csv", 
+            "rel_gaze_two_query_id_assigned.csv",
             "rel_mouse_left_query_id_assigned.csv",
             "rel_mouse_right_query_id_assigned.csv"
         ]
+        has_pairwise = all((task_path / f).exists() for f in pairwise_files)
         
-        for file_name in required_files:
-            if not (task_path / file_name).exists():
-                return False
-        return True
+        # Check for pointwise files (2 files)
+        pointwise_files = [
+            "rel_gaze_query_id_assigned.csv",
+            "rel_mouse_query_id_assigned.csv"
+        ]
+        has_pointwise = all((task_path / f).exists() for f in pointwise_files)
+        
+        if has_pairwise:
+            return 'pairwise'
+        elif has_pointwise:
+            return 'pointwise'
+        else:
+            return None
     
-    def find_pairwise_queries(self, user_id: str, task_id: str) -> List[int]:
-        """Find queries with both responses for a given user/task combination"""
-        pairwise_queries = []
+    def find_queries_for_task(self, user_id: str, task_id: str, comparison_type: str) -> List[int]:
+        """Find all valid queries for a given user/task combination"""
+        queries = []
         
         for query_id, query_data in self.query_data_cache.items():
-            if (query_data['user_id'] == user_id and 
-                query_data['task_id'] == task_id and
-                query_data.get('llm_response_2') and 
-                query_data['llm_response_2'].strip() not in ['NULL', '', 'null']):
-                pairwise_queries.append(query_id)
+            if query_data['user_id'] == user_id and query_data['task_id'] == task_id:
+                # For pairwise, require both responses
+                if comparison_type == 'pairwise':
+                    if (query_data.get('llm_response_2') and 
+                        query_data['llm_response_2'].strip() not in ['NULL', '', 'null']):
+                        queries.append(query_id)
+                # For pointwise, require only first response
+                elif comparison_type == 'pointwise':
+                    if (query_data.get('llm_response_1') and 
+                        query_data['llm_response_1'].strip() not in ['NULL', '', 'null']):
+                        queries.append(query_id)
         
-        return pairwise_queries
+        return queries
     
     def load_behavioral_data(self, file_path: Path, query_id: int) -> List[Dict]:
         """Load ALL behavioral data for a specific query (including looking away periods)"""
@@ -244,16 +266,20 @@ class FeatureExtractionPipeline:
         return windowed_features
     
     def extract_features_for_response(self, user_id: str, task_id: str, query_id: int, 
-                                    response_num: int, response_text: str) -> Optional[Dict]:
+                                    comparison_type: str, response_num: int, response_text: str) -> Optional[Dict]:
         """Extract all features for a single response (both gaze and mouse)"""
         try:
-            # Determine which files to use based on response number
-            if response_num == 1:
-                gaze_file = self.data_dir / user_id / task_id / "rel_gaze_one_query_id_assigned.csv"
-                mouse_file = self.data_dir / user_id / task_id / "rel_mouse_left_query_id_assigned.csv"
-            else:
-                gaze_file = self.data_dir / user_id / task_id / "rel_gaze_two_query_id_assigned.csv"
-                mouse_file = self.data_dir / user_id / task_id / "rel_mouse_right_query_id_assigned.csv"
+            # Determine which files to use based on comparison type and response number
+            if comparison_type == 'pairwise':
+                if response_num == 1:
+                    gaze_file = self.data_dir / user_id / task_id / "rel_gaze_one_query_id_assigned.csv"
+                    mouse_file = self.data_dir / user_id / task_id / "rel_mouse_left_query_id_assigned.csv"
+                else:
+                    gaze_file = self.data_dir / user_id / task_id / "rel_gaze_two_query_id_assigned.csv"
+                    mouse_file = self.data_dir / user_id / task_id / "rel_mouse_right_query_id_assigned.csv"
+            else:  # pointwise
+                gaze_file = self.data_dir / user_id / task_id / "rel_gaze_query_id_assigned.csv"
+                mouse_file = self.data_dir / user_id / task_id / "rel_mouse_query_id_assigned.csv"
             
             # Load behavioral data
             gaze_data = self.load_behavioral_data(gaze_file, query_id)
@@ -305,79 +331,108 @@ class FeatureExtractionPipeline:
             print(f"Error extracting features for {user_id}/{task_id}/query_{query_id}/response_{response_num}: {e}")
             return None
     
-    def create_pairwise_features(self, user_id: str, task_id: str, query_id: int) -> Optional[Dict]:
-        """Create pairwise feature vector for a query with both responses"""
+    def create_feature_row(self, user_id: str, task_id: str, query_id: int, comparison_type: str) -> Optional[Dict]:
+        """Create feature vector for a query (pairwise or pointwise)"""
         try:
             # Get query data
             query_data = self.query_data_cache.get(query_id)
             if not query_data:
                 return None
             
-            # Check if both responses exist and are valid
-            if (not query_data.get('llm_response_2') or 
-                query_data['llm_response_2'].strip() in ['NULL', '', 'null']):
-                return None
-            
-            # Extract features for both responses
-            response_1_features = self.extract_features_for_response(
-                user_id, task_id, query_id, 1, query_data['llm_response_1']
-            )
-            response_2_features = self.extract_features_for_response(
-                user_id, task_id, query_id, 2, query_data['llm_response_2']
-            )
-            
-            if not response_1_features or not response_2_features:
-                return None
-            
-            # Create pairwise feature vector
-            pairwise_features = {}
+            # Create feature row
+            feature_row = {}
             
             # Add metadata first
-            pairwise_features['query_id'] = query_id
-            pairwise_features['user_id'] = user_id
-            pairwise_features['task_id'] = task_id
-            pairwise_features['user_query'] = query_data['user_query']
-            pairwise_features['llm_name_1'] = query_data.get('llm_name_1', '')
-            pairwise_features['llm_name_2'] = query_data.get('llm_name_2', '')
-            pairwise_features['llm_response_1'] = query_data.get('llm_response_1', '')
-            pairwise_features['llm_response_2'] = query_data.get('llm_response_2', '')
+            feature_row['comparison_type'] = comparison_type
+            feature_row['query_id'] = query_id
+            feature_row['user_id'] = user_id
+            feature_row['task_id'] = task_id
+            feature_row['user_query'] = query_data['user_query']
+            feature_row['llm_name_1'] = query_data.get('llm_name_1', '')
+            feature_row['llm_response_1'] = query_data.get('llm_response_1', '')
             
-            # Add target variables
-            try:
-                pairwise_features['likert_1'] = float(query_data.get('likert_1', 0)) if query_data.get('likert_1') else 0
-                pairwise_features['likert_2'] = float(query_data.get('likert_2', 0)) if query_data.get('likert_2') else 0
-                pairwise_features['preference'] = int(query_data.get('preference', 0)) if query_data.get('preference') else 0
-            except (ValueError, TypeError):
-                pairwise_features['likert_1'] = 0
-                pairwise_features['likert_2'] = 0
-                pairwise_features['preference'] = 0
+            # Extract features for Response A (always present)
+            response_1_features = self.extract_features_for_response(
+                user_id, task_id, query_id, comparison_type, 1, query_data['llm_response_1']
+            )
             
-            pairwise_features['normalized_likert_1'] = pairwise_features['likert_1'] / 5.0
-            pairwise_features['normalized_likert_2'] = pairwise_features['likert_2'] / 5.0
+            if not response_1_features:
+                return None
             
-            # Binary preference (0 if response A preferred, 1 if response B preferred)
-            pairwise_features['binary_preference'] = 1 if pairwise_features['preference'] == 2 else 0
-            
-            # Add response A features (response 1)
+            # Add Response A features
             for key, value in response_1_features.items():
-                pairwise_features[f'response_A_{key}'] = value
+                feature_row[f'response_A_{key}'] = value
             
-            # Add response B features (response 2)
-            for key, value in response_2_features.items():
-                pairwise_features[f'response_B_{key}'] = value
+            # Handle pairwise-specific fields
+            if comparison_type == 'pairwise':
+                # Add Response B metadata
+                feature_row['llm_name_2'] = query_data.get('llm_name_2', '')
+                feature_row['llm_response_2'] = query_data.get('llm_response_2', '')
+                
+                # Add target variables
+                try:
+                    feature_row['likert_1'] = float(query_data.get('likert_1', 0)) if query_data.get('likert_1') else 0
+                    feature_row['likert_2'] = float(query_data.get('likert_2', 0)) if query_data.get('likert_2') else 0
+                    feature_row['preference'] = int(query_data.get('preference', 0)) if query_data.get('preference') else 0
+                except (ValueError, TypeError):
+                    feature_row['likert_1'] = 0
+                    feature_row['likert_2'] = 0
+                    feature_row['preference'] = 0
+                
+                feature_row['normalized_likert_1'] = feature_row['likert_1'] / 5.0
+                feature_row['normalized_likert_2'] = feature_row['likert_2'] / 5.0
+                
+                # Binary preference (0 if response A preferred, 1 if response B preferred)
+                feature_row['binary_preference'] = 1 if feature_row['preference'] == 2 else 0
+                
+                # Extract features for Response B
+                response_2_features = self.extract_features_for_response(
+                    user_id, task_id, query_id, comparison_type, 2, query_data['llm_response_2']
+                )
+                
+                if not response_2_features:
+                    return None
+                
+                # Add Response B features
+                for key, value in response_2_features.items():
+                    feature_row[f'response_B_{key}'] = value
+                    
+            else:  # pointwise
+                # Set Response B and pairwise-specific fields to None
+                feature_row['llm_name_2'] = None
+                feature_row['llm_response_2'] = None
+                
+                # Add target variables (only likert_1 is valid)
+                try:
+                    feature_row['likert_1'] = float(query_data.get('likert_1', 0)) if query_data.get('likert_1') else 0
+                except (ValueError, TypeError):
+                    feature_row['likert_1'] = 0
+                
+                feature_row['normalized_likert_1'] = feature_row['likert_1'] / 5.0
+                
+                # Set pairwise-only targets to None
+                feature_row['likert_2'] = None
+                feature_row['preference'] = None
+                feature_row['normalized_likert_2'] = None
+                feature_row['binary_preference'] = None
+                
+                # Set all Response B features to None
+                # We need to add placeholders for all Response B feature columns
+                for key in response_1_features.keys():
+                    feature_row[f'response_B_{key}'] = None
             
-            return pairwise_features
+            return feature_row
             
         except Exception as e:
-            print(f"Error creating pairwise features for {user_id}/{task_id}/query_{query_id}: {e}")
+            print(f"Error creating feature row for {user_id}/{task_id}/query_{query_id}: {e}")
             return None
     
     def get_csv_headers(self) -> List[str]:
         """Generate CSV headers for the feature vector"""
         headers = [
             # Metadata
-            'query_id', 'user_id', 'task_id', 'user_query', 'llm_name_1', 'llm_name_2', 
-            'llm_response_1', 'llm_response_2',
+            'comparison_type', 'query_id', 'user_id', 'task_id', 'user_query', 
+            'llm_name_1', 'llm_name_2', 'llm_response_1', 'llm_response_2',
             
             # Target variables
             'likert_1', 'likert_2', 'preference', 'normalized_likert_1', 'normalized_likert_2', 'binary_preference',
@@ -418,6 +473,8 @@ class FeatureExtractionPipeline:
         combinations = self.find_user_task_combinations()
         total_processed = 0
         total_successful = 0
+        pairwise_count = 0
+        pointwise_count = 0
         
         if not combinations:
             print("No valid user/task combinations found")
@@ -432,26 +489,30 @@ class FeatureExtractionPipeline:
             writer = csv.DictWriter(csvfile, fieldnames=headers)
             writer.writeheader()
             
-            for user_id, task_id in combinations:
-                print(f"Processing {user_id}/{task_id}...")
+            for user_id, task_id, comparison_type in combinations:
+                print(f"Processing {user_id}/{task_id} ({comparison_type})...")
                 
-                # Find pairwise queries for this combination
-                pairwise_queries = self.find_pairwise_queries(user_id, task_id)
+                # Find queries for this combination
+                queries = self.find_queries_for_task(user_id, task_id, comparison_type)
                 
-                if not pairwise_queries:
-                    print(f"  No pairwise queries found for {user_id}/{task_id}")
+                if not queries:
+                    print(f"  No valid queries found for {user_id}/{task_id}")
                     continue
                 
-                for query_id in pairwise_queries:
+                for query_id in queries:
                     total_processed += 1
                     
                     # Extract features for this query
-                    features = self.create_pairwise_features(user_id, task_id, query_id)
+                    features = self.create_feature_row(user_id, task_id, query_id, comparison_type)
                     
                     if features:
                         # Write row to CSV
                         writer.writerow(features)
                         total_successful += 1
+                        if comparison_type == 'pairwise':
+                            pairwise_count += 1
+                        else:
+                            pointwise_count += 1
                         print(f"  ✓ Query {query_id}: Features extracted successfully")
                     else:
                         print(f"  ✗ Query {query_id}: Failed to extract features")
@@ -459,24 +520,26 @@ class FeatureExtractionPipeline:
         print(f"\nProcessing complete!")
         print(f"Total queries processed: {total_processed}")
         print(f"Successful extractions: {total_successful}")
+        print(f"  - Pairwise: {pairwise_count}")
+        print(f"  - Pointwise: {pointwise_count}")
         print(f"Output file: {self.output_csv}")
         
         return total_successful
 
 def main():
-    """Main function to run the feature extraction pipeline"""
+    """Main function to run the combined feature extraction pipeline"""
     
     # Configuration
     data_dir = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/user_behavior"
     query_logs_file = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/full_query_logs_table.csv"
-    output_csv = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/extracted_features_pairwise.csv"
+    output_csv = "/Users/mehulpatwari/Code/cics/ciir/research/NLP-Gazing/extracted_features_both.csv"
 
     # Initialize and run pipeline
-    pipeline = FeatureExtractionPipeline(data_dir, query_logs_file, output_csv)
+    pipeline = CombinedFeatureExtractionPipeline(data_dir, query_logs_file, output_csv)
     successful_extractions = pipeline.process_all_combinations()
     
     if successful_extractions > 0:
-        print(f"\n🎉 Successfully extracted features for {successful_extractions} pairwise comparisons")
+        print(f"\n🎉 Successfully extracted features for {successful_extractions} comparisons")
         print(f"📁 Output saved to: {output_csv}")
     else:
         print("\n❌ No features were successfully extracted")

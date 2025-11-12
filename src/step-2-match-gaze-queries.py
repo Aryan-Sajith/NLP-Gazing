@@ -25,13 +25,20 @@ NO_GAZE_QUERY_ID = -2  # special value for "not looking at the screen"
 PROMPT_GAZE_QUERY_ID = -1  # special value for "looking at the prompt"
 BASE_QUERY_ID = 0  # default value for query_id if no match is found
 
-# Only process pairwise files (exclude pointwise files)
+# Process both pairwise and pointwise files
 PAIRWISE_FILES = [
     "rel_gaze_one.csv",
     "rel_gaze_two.csv", 
     "rel_mouse_left.csv",
     "rel_mouse_right.csv"
 ]
+
+POINTWISE_FILES = [
+    "rel_gaze.csv",
+    "rel_mouse.csv"
+]
+
+ALL_FILES = PAIRWISE_FILES + POINTWISE_FILES
 
 # --------------------------------------------------------------------------- #
 # UTILITIES
@@ -62,8 +69,8 @@ with QUERY_JSON.open(encoding="utf-8") as fh:
 # MAIN WALK
 # --------------------------------------------------------------------------- #
 for src in BASE_DIR.rglob("rel_*.csv"):
-    # Only process pairwise files, skip pointwise files
-    if src.name not in PAIRWISE_FILES:
+    # Process both pairwise and pointwise files
+    if src.name not in ALL_FILES:
         continue
         
     # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
@@ -77,15 +84,25 @@ for src in BASE_DIR.rglob("rel_*.csv"):
     if not task_block:
         continue
 
-    # pick which response column matters for this file
-    resp_key = "llm_response_2" if src.stem.endswith("_two") or src.stem.endswith("_right") else "llm_response_1"
-
-    # build (query_id, response_text) pairs
-    responses = [
-        (q["query_id"], q.get(resp_key, ""))
-        for q in task_block
-        if q.get(resp_key)
-    ]
+    # Determine if this is a pointwise or pairwise file and which response(s) to use
+    is_pointwise = src.name in POINTWISE_FILES
+    
+    if is_pointwise:
+        # For pointwise files, use llm_response_1 (the only response)
+        responses = [
+            (q["query_id"], q.get("llm_response_1", ""))
+            for q in task_block
+            if q.get("llm_response_1")
+        ]
+    else:
+        # For pairwise files, pick which response column matters
+        resp_key = "llm_response_2" if src.stem.endswith("_two") or src.stem.endswith("_right") else "llm_response_1"
+        responses = [
+            (q["query_id"], q.get(resp_key, ""))
+            for q in task_block
+            if q.get(resp_key)
+        ]
+    
     if not responses:
         continue
 
