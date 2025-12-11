@@ -194,13 +194,6 @@ for src in BASE_DIR.rglob("rel_*.csv"):
                     query_id = qid
                     break
 
-        # checks if user is looking at the response
-        is_looking_at_response = query_id not in [PROMPT_GAZE_QUERY_ID, NO_GAZE_QUERY_ID, BASE_QUERY_ID] and not is_not_looking
-
-        # updates dict used for response_gaze_percentage
-        query_stats[query_id]['total'] += 1
-        if is_looking_at_response:
-            query_stats[query_id]['response_looks'] += 1
 
         processed_rows.append({
             'data': [x, y, window, idx_str, rel_ts, abs_ts],
@@ -209,9 +202,6 @@ for src in BASE_DIR.rglob("rel_*.csv"):
             'is_not_looking': str(is_not_looking).lower(),   
         })
 
-    # dict of actual response_gaze_percentages based off of query_stats
-    query_percentages = { query_id : stats['response_looks'] / stats['total'] if stats['total'] > 0 else 0.0 for query_id, stats in query_stats.items()}
-    
     # builds rows
     out_rows = [
         [
@@ -223,20 +213,16 @@ for src in BASE_DIR.rglob("rel_*.csv"):
             "abs_ts",
             "query_id",
             "is_experimental_text",
-            "is_not_looking",
-            "response_gaze_percentage",
         ]
     ]
 
     for row in processed_rows:
         q_id = row['query_id']
-        percentage = query_percentages[q_id]
 
         out_rows.append(
             row['data'] + [
                 row['is_exp_text'], 
-                row['is_not_looking'], 
-                f"{percentage:.4f}"
+                row['is_not_looking']
             # [
             #     x,
             #     y,

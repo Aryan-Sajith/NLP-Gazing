@@ -1,0 +1,319 @@
+"""
+Annotate every   data/<user>/<task>/rel_*.csv   file and write the results to a
+new file whose name is the original stem plus “-query-id-assigned”.
+
+Example:
+    rel_gaze_two.csv  ->  rel_gaze_two-query-id-assigned.csv
+The original files are left untouched.
+"""
+
+import csv
+import json
+import math
+from pathlib import Path
+from collections import defaultdict
+
+# --------------------------------------------------------------------------- #
+# CONFIGURATION
+# --------------------------------------------------------------------------- #
+BASE_DIR   = Path("user_behavior")
+QUERY_JSON = Path("query_data.json")
+PROMPT = (
+    "After you type your question, please wait patiently. It might take up to 1 "
+    "minute for AI to finish generating their answer. The AI's response will "
+    "show up here."
+)
+NO_GAZE_QUERY_ID = -2  # special value for "not looking at the screen"
+PROMPT_GAZE_QUERY_ID = -1  # special value for "looking at the prompt"
+BASE_QUERY_ID = 0  # default value for query_id if no match is found
+
+# Only process pairwise files (exclude pointwise files)
+PAIRWISE_FILES = [
+    "rel_gaze_one.csv",
+    "rel_gaze_two.csv", 
+    "rel_mouse_left.csv",
+    "rel_mouse_right.csv"
+]
+
+OUTPUT_RESPONSE_FILE = "response.txt"
+OUTPUT_GREEN_BOX_FILE = "green_box.txt"
+
+# --------------------------------------------------------------------------- #
+# UTILITIES
+# --------------------------------------------------------------------------- #
+def match_window(msg: str, window: str, raw_idx: int) -> bool:
+    """Check if the given message contains the window text at the specified index.
+    The message is cleaned of newlines and carriage returns before checking.
+    The window is 10 characters before and after the index but clipped at the edges of the message.
+    We use 15 characters before and after the index to allow for more context to handle edge cases where
+    the window might not be exactly at the index due to text formatting or other issues.
+    """
+    # Clean both message and window of newlines and carriage returns
+    msg_cleaned = msg.replace('\n', ' ').replace('\r', ' ')
+    window_cleaned = window.replace('\n', ' ').replace('\r', ' ')
+    
+    window_length = 15  # characters before and after the index
+    start_idx_inclusive = raw_idx - window_length if raw_idx - window_length >= 0 else 0
+    end_idx_exclusive = raw_idx + window_length if raw_idx + window_length < len(msg_cleaned) else len(msg_cleaned)
+    return window_cleaned in msg_cleaned[start_idx_inclusive:end_idx_exclusive]
+
+# --------------------------------------------------------------------------- #
+# LOAD QUERY DATA
+# --------------------------------------------------------------------------- #
+with QUERY_JSON.open(encoding="utf-8") as fh:
+    QUERY_DATA: dict = json.load(fh)
+
+# --------------------------------------------------------------------------- #
+# MAIN WALK
+# --------------------------------------------------------------------------- #
+#user -> task_id -> query_id -> {camera_green, total_entries, response_left, response_right}
+def make_leaf():
+    return {
+        "camera_green": 0,
+        "total_entries_left": 0,
+        "total_entries_right": 0,
+        "response_left": 0,
+        "response_right": 0
+    }
+
+analysis_dict = defaultdict(
+    lambda: defaultdict(
+        lambda: defaultdict(make_leaf)
+    )
+)
+
+
+for src in BASE_DIR.rglob("rel_gaze*.csv"):
+    # Only process pairwise files, skip pointwise files
+    # if src.name not in PAIRWISE_FILES:
+    #     continue
+        
+    # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
+    try:
+        _, user_id, task_id, _ = src.parts[-4:]
+        # if user_id != 'abc':
+        #     continue
+    except ValueError:
+        continue
+
+    # locate task block in JSON
+    task_block = QUERY_DATA.get(user_id, {}).get(task_id, [])
+    if not task_block:
+        continue
+
+    # pick which response column matters for this file
+    resp_key = 'llm_response_2' if src.stem.endswith("_two") or src.stem.endswith("_right") else 'llm_response_1'
+
+    # build (query_id, response_text) pairs
+    responses = [
+        (q["query_id"], q.get(resp_key, ""))
+        for q in task_block
+        if q.get(resp_key)
+    ]
+    # if not responses:
+    #     continue
+
+    # read the file
+    with src.open(encoding="utf-8") as fh:
+        raw_rows = list(csv.reader(fh))
+    
+
+    # First pass: Build timestamp ranges for each query_id
+    # We'll use this to assign query_ids to not_looking events based on their timestamps
+    query_time_ranges = {}  # {query_id: min_ts}
+    
+    # Temporary first pass to find time ranges
+    for row in raw_rows:
+        if len(row) == 7:
+            x, y, window, idx_str, rel_ts_str, _, abs_ts = row
+        elif len(row) == 6:
+            x, y, window, idx_str, rel_ts_str, abs_ts = row
+        else:
+            continue
+        
+        try:
+            x_f, y_f = float(x), float(y)
+            rel_ts = float(rel_ts_str)
+        except (ValueError, TypeError):
+            continue
+        
+        try:
+            idx_i = int(float(idx_str)) if idx_str.strip() else -1
+        except (ValueError, TypeError):
+            idx_i = -1
+        
+        window = window.strip()
+        is_not_looking = x_f == -1 and y_f == -1
+        
+        # Only process looking events for time range calculation
+        if not is_not_looking:
+            # Check if this matches any query
+            for qid, text in responses:
+                if match_window(text, window, idx_i):
+                    if qid not in query_time_ranges:
+                        query_time_ranges[qid] = rel_ts
+                    else:
+                        query_time_ranges[qid] = min(query_time_ranges[qid], rel_ts)
+                    break
+
+    query_time_ranges = sorted(query_time_ranges.items(), key=lambda x: x[1], reverse=True)
+
+    # processes rows
+    processed_rows = []
+    # query_stats = defaultdict(lambda: {'total': 0, 'response_looks': 0})
+
+    for row in raw_rows:
+        # csv.reader handles CSV quoting properly
+        # Some files have 6 fields: x, y, window, idx, rel_ts, abs_ts
+        # Some files have 7 fields: x, y, window, idx, rel_ts, unknown, abs_ts
+        
+        if len(row) == 7:
+            x, y, window, idx_str, rel_ts, camera_green, abs_ts = row
+            camera_green = True if camera_green == '1' else False
+        elif len(row) == 6:
+            x, y, window, idx_str, rel_ts, abs_ts = row
+            camera_green = False
+        else:
+            # Skip invalid rows (header or malformed)
+            continue
+        
+        # Parse numeric values
+        try:
+            x_f, y_f = float(x), float(y)
+        except (ValueError, TypeError):
+            continue
+        
+        # Parse index
+        try:
+            idx_i = int(float(idx_str)) if idx_str.strip() else -1
+        except (ValueError, TypeError):
+            idx_i = -1
+        
+        # Clean window text
+        window = window.strip()
+
+        is_not_looking = x_f == -1 and y_f == -1
+        is_exp_text = False
+        query_id = BASE_QUERY_ID # default value if no match is found
+
+        rel_ts_float = float(rel_ts)
+        # best_min_ts = float('-inf')
+
+        for qid, min_ts in query_time_ranges:
+            if min_ts <= rel_ts_float:
+                query_id = qid
+                break
+
+
+        if query_id == BASE_QUERY_ID:
+            continue
+
+        #if right side
+        if resp_key == 'llm_response_2':
+            analysis_dict[user_id][task_id][query_id]["total_entries_right"] += 1
+            if not is_not_looking:
+                analysis_dict[user_id][task_id][query_id]["response_right"] += 1
+        else:
+            analysis_dict[user_id][task_id][query_id]["total_entries_left"] += 1
+            if not is_not_looking:
+                analysis_dict[user_id][task_id][query_id]["response_left"] += 1
+
+        if camera_green:
+            analysis_dict[user_id][task_id][query_id]["camera_green"] += 1
+
+        # print()
+
+summary_query_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(float))) 
+summary_task_dict = defaultdict(lambda: defaultdict(float))
+# summary_user_dict = defaultdict(float)
+
+with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Queries\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in analysis_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            f.write(f'\tTask_ID: {task_id}\n')
+            for query_id, data_dict in query_id_dict.items():
+                if data_dict['total_entries_right'] == 0:
+                    percentage = 0 if data_dict['total_entries_left'] == 0 else data_dict['response_left'] / data_dict["total_entries_left"]
+                    f.write(f'\t\tQuery_ID {query_id}: {percentage}\n')
+                    summary_query_dict[user_id][task_id][query_id] = percentage
+                else:
+                    left_percentage = 0 if data_dict['total_entries_left'] == 0 else data_dict['response_left'] / data_dict['total_entries_left']
+                    right_percentage = data_dict["response_right"] / data_dict['total_entries_right']
+                    overall_percentage = (data_dict["response_left"] + data_dict['response_right']) / (data_dict["total_entries_left"] + data_dict["total_entries_right"])
+
+                    f.write(f'\t\tQuery_ID (Left) {query_id}: {left_percentage}\n')
+                    f.write(f'\t\tQuery_ID (Right) {query_id}: {right_percentage}\n')
+                    f.write(f'\t\tQuery_ID (Overall) {query_id}: {overall_percentage}\n')
+                    f.write(f'\t\tQuery_ID (Sum) {query_id}: {left_percentage + right_percentage}\n')
+
+                    summary_query_dict[user_id][task_id][query_id] = overall_percentage
+
+                f.write('\n')
+
+            f.write('\n')
+        f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Tasks\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_query_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            percentage = sum(query_id_dict.values()) / len(query_id_dict)
+            summary_task_dict[user_id][task_id] = percentage
+            f.write(f'\tTask_ID {task_id}: {percentage}\n')
+        f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Users\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_task_dict.items():
+        percentage = sum(task_id_dict.values()) / len(task_id_dict)
+        f.write(f'User ID {user_id}: {percentage}\n')
+    f.write('\n')
+
+with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Queries\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in analysis_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            f.write(f'\tTask_ID: {task_id}\n')
+            for query_id, data_dict in query_id_dict.items():
+                if data_dict['total_entries_left'] + data_dict['total_entries_right'] > 0:
+                    percentage = data_dict['camera_green'] / (data_dict["total_entries_left"] + data_dict['total_entries_right'])
+                    f.write(f'\t\tQuery_ID {query_id}: {percentage}\n')
+                    summary_query_dict[user_id][task_id][query_id] = percentage
+                f.write('\n')
+            f.write('\n')
+        f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Tasks\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_query_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            percentage = sum(query_id_dict.values()) / len(query_id_dict)
+            summary_task_dict[user_id][task_id] = percentage
+            f.write(f'\tTask_ID {task_id}: {percentage}\n')
+        f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Users\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_task_dict.items():
+        percentage = sum(task_id_dict.values()) / len(task_id_dict)
+        f.write(f'User ID {user_id}: {percentage}\n')
+    f.write('\n')

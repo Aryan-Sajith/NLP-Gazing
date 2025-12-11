@@ -220,3 +220,7 @@ data_dump/
 
 # Ignore pipeline instructions
 PIPELINE_INSTRUCTIONS.md
+
+#Ignore the data analysis .txt files
+green_box.txt
+response.txt
