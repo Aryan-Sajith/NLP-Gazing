@@ -8,6 +8,7 @@ The original files are left untouched.
 """
 
 import csv
+import pandas as pd
 import json
 import math
 from pathlib import Path
@@ -37,6 +38,9 @@ PAIRWISE_FILES = [
 
 OUTPUT_RESPONSE_FILE = "response.txt"
 OUTPUT_GREEN_BOX_FILE = "green_box.txt"
+
+TASK_TABLE_FILE = Path("task_table.csv")
+START_DATE = pd.to_datetime("2025-11-25 14:24:56")
 
 # --------------------------------------------------------------------------- #
 # UTILITIES
@@ -82,6 +86,18 @@ analysis_dict = defaultdict(
     )
 )
 
+#gets all user_ids within timerange to filter out everything that isnt
+user_ids_within_time_range = []
+
+
+# for src in TASK_TABLE_FILE.rglob("Batch_*.csv"):
+df_database = pd.read_csv(TASK_TABLE_FILE)
+df_database["user_id"] = df_database["user_id"].astype(str).str.strip()
+df_database["finished"] = pd.to_datetime(df_database["finished"], format="%Y-%m-%d %H:%M:%S")
+df_database = df_database[df_database["finished"].notna() & (df_database["finished"] > START_DATE)]
+
+user_ids_within_time_range.extend(df_database['user_id'].unique())
+
 
 for src in BASE_DIR.rglob("rel_gaze*.csv"):
     # Only process pairwise files, skip pointwise files
@@ -94,6 +110,9 @@ for src in BASE_DIR.rglob("rel_gaze*.csv"):
         # if user_id != 'abc':
         #     continue
     except ValueError:
+        continue
+
+    if user_id not in user_ids_within_time_range:
         continue
 
     # locate task block in JSON
