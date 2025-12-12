@@ -275,7 +275,7 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
                 f.write('\n')
 
             f.write('\n')
-        f.write('\n')
+        # f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
     f.write("# Average Across Tasks\n")
@@ -286,7 +286,7 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
         for task_id, query_id_dict in task_id_dict.items():
             percentage = sum(query_id_dict.values()) / len(query_id_dict)
             summary_task_dict[user_id][task_id] = percentage
-            f.write(f'\tTask_ID {task_id}: {percentage}\n')
+            f.write(f'\tTask_ID {task_id}: {percentage}\n\n')
         f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
@@ -295,7 +295,7 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
 
     for user_id, task_id_dict in summary_task_dict.items():
         percentage = sum(task_id_dict.values()) / len(task_id_dict)
-        f.write(f'User ID {user_id}: {percentage}\n')
+        f.write(f'User ID {user_id}: {percentage}\n\n')
     f.write('\n')
 
 with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
@@ -314,7 +314,7 @@ with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
                     summary_query_dict[user_id][task_id][query_id] = percentage
                 f.write('\n')
             f.write('\n')
-        f.write('\n')
+        # f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
     f.write("# Average Across Tasks\n")
@@ -325,7 +325,7 @@ with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
         for task_id, query_id_dict in task_id_dict.items():
             percentage = sum(query_id_dict.values()) / len(query_id_dict)
             summary_task_dict[user_id][task_id] = percentage
-            f.write(f'\tTask_ID {task_id}: {percentage}\n')
+            f.write(f'\tTask_ID {task_id}: {percentage}\n\n')
         f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
@@ -334,5 +334,5 @@ with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
 
     for user_id, task_id_dict in summary_task_dict.items():
         percentage = sum(task_id_dict.values()) / len(task_id_dict)
-        f.write(f'User ID {user_id}: {percentage}\n')
+        f.write(f'User ID {user_id}: {percentage}\n\n')
     f.write('\n')
