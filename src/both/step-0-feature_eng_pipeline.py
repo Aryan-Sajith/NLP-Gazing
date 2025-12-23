@@ -350,6 +350,7 @@ class CombinedFeatureExtractionPipeline:
             feature_row['user_query'] = query_data['user_query']
             feature_row['llm_name_1'] = query_data.get('llm_name_1', '')
             feature_row['llm_response_1'] = query_data.get('llm_response_1', '')
+            feature_row['adjustment'] = query_data.get('adjustment', '')
             
             # Extract features for Response A (always present)
             response_1_features = self.extract_features_for_response(
@@ -432,7 +433,7 @@ class CombinedFeatureExtractionPipeline:
         headers = [
             # Metadata
             'comparison_type', 'query_id', 'user_id', 'task_id', 'user_query', 
-            'llm_name_1', 'llm_name_2', 'llm_response_1', 'llm_response_2',
+            'llm_name_1', 'llm_name_2', 'llm_response_1', 'llm_response_2', 'adjustment',
             
             # Target variables
             'likert_1', 'likert_2', 'preference', 'normalized_likert_1', 'normalized_likert_2', 'binary_preference',

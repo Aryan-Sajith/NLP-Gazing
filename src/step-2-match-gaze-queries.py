@@ -1,10 +1,15 @@
 """
 Annotate every   data/<user>/<task>/rel_*.csv   file and write the results to a
-new file whose name is the original stem plus “-query-id-assigned”.
+new file whose name is the original stem plus "-query-id-assigned".
 
 Example:
     rel_gaze_two.csv  ->  rel_gaze_two-query-id-assigned.csv
 The original files are left untouched.
+
+METHOD: Sequential context-based matching
+This uses a sequential processing approach where "not looking" events are assigned
+to the query the user was JUST reading, not based on time ranges (which causes bugs
+when users look at the same query multiple times with breaks in between).
 """
 
 import csv
@@ -110,50 +115,7 @@ for src in BASE_DIR.rglob("rel_*.csv"):
     with src.open(encoding="utf-8") as fh:
         raw_rows = list(csv.reader(fh))
     
-    # First pass: Build timestamp ranges for each query_id
-    # We'll use this to assign query_ids to not_looking events based on their timestamps
-    query_time_ranges = {}  # {query_id: (min_ts, max_ts)}
-
-    # First pass: Build timestamp ranges for each query_id
-    # We'll use this to assign query_ids to not_looking events based on their timestamps
-    query_time_ranges = {}  # {query_id: (min_ts, max_ts)}
-    
-    # Temporary first pass to find time ranges
-    for row in raw_rows:
-        if len(row) == 7:
-            x, y, window, idx_str, rel_ts_str, _, abs_ts = row
-        elif len(row) == 6:
-            x, y, window, idx_str, rel_ts_str, abs_ts = row
-        else:
-            continue
-        
-        try:
-            x_f, y_f = float(x), float(y)
-            rel_ts = float(rel_ts_str)
-        except (ValueError, TypeError):
-            continue
-        
-        try:
-            idx_i = int(float(idx_str)) if idx_str.strip() else -1
-        except (ValueError, TypeError):
-            idx_i = -1
-        
-        window = window.strip()
-        is_not_looking = x_f == -1 and y_f == -1
-        
-        # Only process looking events for time range calculation
-        if not is_not_looking:
-            # Check if this matches any query
-            for qid, text in responses:
-                if match_window(text, window, idx_i):
-                    if qid not in query_time_ranges:
-                        query_time_ranges[qid] = [rel_ts, rel_ts]
-                    else:
-                        query_time_ranges[qid][0] = min(query_time_ranges[qid][0], rel_ts)
-                        query_time_ranges[qid][1] = max(query_time_ranges[qid][1], rel_ts)
-                    break
-
-    # process rows
+    # NEW METHOD: Sequential processing with context tracking
     out_rows = [
         [
             "x",
@@ -167,6 +129,9 @@ for src in BASE_DIR.rglob("rel_*.csv"):
             "is_not_looking",
         ]
     ]
+
+    # Track the last query the user was actually reading
+    last_query_id = NO_GAZE_QUERY_ID  # Start with "not looking"
 
     for row in raw_rows:
         # csv.reader handles CSV quoting properly
@@ -198,28 +163,29 @@ for src in BASE_DIR.rglob("rel_*.csv"):
 
         is_not_looking = x_f == -1 and y_f == -1
         is_exp_text = False
-        query_id = BASE_QUERY_ID # default value if no match is found
+        query_id = BASE_QUERY_ID  # default value if no match is found
 
         if is_not_looking:
-            # For not_looking events, assign query_id based on timestamp
-            # Check which query's time range this timestamp falls into
-            query_id = NO_GAZE_QUERY_ID  # default to -2 if not in any range
-            try:
-                rel_ts_float = float(rel_ts)
-                for qid, (min_ts, max_ts) in query_time_ranges.items():
-                    if min_ts <= rel_ts_float <= max_ts:
-                        query_id = qid
-                        break
-            except (ValueError, TypeError):
-                pass
+            # NEW METHOD: Assign to the last query the user was reading
+            query_id = last_query_id
         elif match_window(PROMPT, window, idx_i):
-            query_id = PROMPT_GAZE_QUERY_ID # special value for "looking at the prompt"
+            # Looking at prompt - assign -1 but DON'T update last_query_id
+            # (we want "not looking" after prompt to go to the last real query)
+            query_id = PROMPT_GAZE_QUERY_ID
             is_exp_text = True
+            # Don't update last_query_id here
         else:
+            # Try to match to a query response
+            matched = False
             for qid, text in responses:
                 if match_window(text, window, idx_i):
                     query_id = qid
+                    last_query_id = qid  # Update context
+                    matched = True
                     break
+            
+            # If no match found, keep query_id as BASE_QUERY_ID (0)
+            # and don't update last_query_id
 
         out_rows.append(
             [

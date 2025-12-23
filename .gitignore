@@ -211,6 +211,7 @@ data/
 user_behavior/
 user_behavior_org/
 data_dump/
+deprc/
 
 # Ignore CSV files
 *.csv
