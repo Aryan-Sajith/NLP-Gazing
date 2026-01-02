@@ -224,6 +224,7 @@ PIPELINE_INSTRUCTIONS.md
 #Ignore the data analysis .txt files
 green_box.txt
 response.txt
+*.txt
 
 #workspaces
 *.code-workspace
