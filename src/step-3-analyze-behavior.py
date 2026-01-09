@@ -42,7 +42,7 @@ OUTPUT_IDX_FILE = "max_index.txt"
 
 TASK_TABLE_FILE = Path("task_table.csv")
 START_DATE = pd.to_datetime("2024-11-30 14:24:56")
-
+END_DATE = pd.to_datetime("2025-11-30 14:24:56")
 # --------------------------------------------------------------------------- #
 # UTILITIES
 # --------------------------------------------------------------------------- #
@@ -102,7 +102,7 @@ user_ids_within_time_range = []
 df_database = pd.read_csv(TASK_TABLE_FILE)
 df_database["user_id"] = df_database["user_id"].astype(str).str.strip()
 df_database["finished"] = pd.to_datetime(df_database["finished"], format="%Y-%m-%d %H:%M:%S")
-df_database = df_database[df_database["finished"].notna() & (df_database["finished"] > START_DATE)]
+df_database = df_database[df_database["finished"].notna() & (df_database["finished"].between(START_DATE, END_DATE))]
 
 user_ids_within_time_range.extend(df_database['user_id'].unique())
 
@@ -410,3 +410,11 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
         f.write(f'User ID {user_id}: {avg_user}\n\n')
     f.write('\n')
         # f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Num Tasks Per User\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+    for user_id, task_id_dict in summary_task_dict.items():
+        f.write(f'User ID {user_id} completed: {len(task_id_dict)}\n\n')
+
+    
