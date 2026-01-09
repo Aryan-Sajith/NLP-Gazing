@@ -41,7 +41,7 @@ OUTPUT_GREEN_BOX_FILE = "green_box.txt"
 OUTPUT_IDX_FILE = "max_index.txt"
 
 TASK_TABLE_FILE = Path("task_table.csv")
-START_DATE = pd.to_datetime("2025-11-25 14:24:56")
+START_DATE = pd.to_datetime("2024-11-30 14:24:56")
 
 # --------------------------------------------------------------------------- #
 # UTILITIES
@@ -115,8 +115,8 @@ for src in BASE_DIR.rglob("rel_gaze*.csv"):
     # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
     try:
         _, user_id, task_id, _ = src.parts[-4:]
-        # if user_id != 'AYZHFJOTFLWRE':
-        #     continue
+        if user_id != 'A34O453D7VWWUK':
+            continue
     except ValueError:
         continue
 
@@ -316,6 +316,9 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
         f.write(f'User ID {user_id}: {percentage}\n\n')
     f.write('\n')
 
+    summary_query_dict.clear()
+    summary_task_dict.clear()
+
 # with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
     f.write("# ----------------------------------------------------------------------- #\n")
     f.write("# Average Across Queries (Green Box)\n")
@@ -371,11 +374,39 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
                     f.write('\n')
                     right_ratio = data_dict["max_idx_right"] / data_dict["query_length_right"] if data_dict["max_idx_right"] > 0 else 0
                     f.write(f'\t\tQuery_ID (Right) {query_id}: {right_ratio}')
+                    f.write('\n')
+
+                    avg_ratio = (left_ratio + right_ratio) / 2
+                    f.write(f'\t\tQuery_ID (Avg) {query_id}: {avg_ratio}')
+                    summary_query_dict[user_id][task_id][query_id] = avg_ratio
                 else:
                     left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
                     f.write(f'\t\tQuery_ID {query_id}: {left_ratio}')
+
+                    summary_query_dict[user_id][task_id][query_id] = left_ratio
                     
                 f.write('\n\n')
 
             f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Tasks (Maximum Index)\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_query_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            avg_task = sum(query_id_dict.values()) / len(query_id_dict)
+            summary_task_dict[user_id][task_id] = avg_task
+            f.write(f'\tTask_ID {task_id}: {avg_task}\n\n')
+        f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Users (Maximum Index)\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_task_dict.items():
+        avg_user = sum(task_id_dict.values()) / len(task_id_dict)
+        f.write(f'User ID {user_id}: {avg_user}\n\n')
+    f.write('\n')
         # f.write('\n')
