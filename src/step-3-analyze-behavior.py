@@ -53,7 +53,7 @@ def match_window(msg: str, window: str, raw_idx: int) -> bool:
     We use 15 characters before and after the index to allow for more context to handle edge cases where
     the window might not be exactly at the index due to text formatting or other issues.
     """
-    if not msg:
+    if not msg or not window:
         return False
 
     # Clean both message and window of newlines and carriage returns
@@ -115,8 +115,8 @@ for src in BASE_DIR.rglob("rel_gaze*.csv"):
     # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
     try:
         _, user_id, task_id, _ = src.parts[-4:]
-        if user_id != 'A34O453D7VWWUK':
-            continue
+        # if user_id != 'A3U042Q64BVD6G':
+        #     continue
     except ValueError:
         continue
 
