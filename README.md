@@ -7,31 +7,48 @@ The main goal of this project is to determine if user usage metrics(like gazing,
 ## ⚡ Quick Start
 
 ```bash
-# IMPORTANT: Skip step-0! It corrupts data.
-
-# Step 1: Extract queries
-python3 src/step-1-extract-queries.py
+# Step 1: Extract queries from master log
+python src/pipelines/extract_queries.py
 
 # Step 2: Match behavioral data to queries
-python3 src/step-2-match-gaze-queries.py
+python src/pipelines/match_gaze.py
 
-# Step 3: Extract features
-cd src/pairwise && python3 step-0-feature_eng_pipeline.py
+# Step 3: Extract behavioral features
+python src/pipelines/extract_features.py
+
+# Optional: Analyze worker quality
+python src/pipelines/analyze_quality.py
 ```
 
 ## 📁 Required Files and Folder Structure
 
 ### Input Files Required:
 1. **`full_query_logs_table.csv`** - Master CSV log file containing all user queries and LLM responses (place in project root)
-2. **User behavioral data** - Raw `rel_*.csv` files (gaze and mouse tracking data)
+2. **User behavioral data** - Raw `rel_*.csv` files (gaze and mouse tracking data) in `user_behavior/` directory
 
 ### Folder Structure:
-- **User data location**: `user_behavior/` - User behavioral data directory
-- Each user has their own subdirectory (e.g., `user_behavior/A1IZ4NX41GKU4X/`)
-- Within each user directory, task-specific CSV files contain the behavioral data
+```
+project_root/
+├── full_query_logs_table.csv    # Required: Master query logs
+├── user_behavior/                # Required: Behavioral data directory
+│   └── {user_id}/               # Each user has their own subdirectory
+│       └── {task_id}/           # Task-specific directories
+│           ├── rel_gaze_one.csv      # Pairwise gaze data (response 1)
+│           ├── rel_gaze_two.csv      # Pairwise gaze data (response 2)
+│           ├── rel_mouse_left.csv    # Pairwise mouse data (response 1)
+│           ├── rel_mouse_right.csv   # Pairwise mouse data (response 2)
+│           ├── rel_gaze.csv          # Pointwise gaze data
+│           └── rel_mouse.csv         # Pointwise mouse data
+└── output/                       # Generated: Pipeline outputs
+    ├── query_data.json          # Step 1 output
+    ├── extracted_features.csv   # Step 3 output
+    ├── low_quality_workers.csv  # Quality analysis output
+    └── worker_quality_report.txt
+```
 
 ### ⚠️ Important Notes:
-- **Do NOT run `src/step-0-data-format.py`** - it corrupts data
+- The refactored codebase has replaced the old numbered scripts with modular pipelines
+- All outputs now go to the `output/` directory
 - Zeros in features are legitimate user behavior, not bugs
 
 ## Pre-Experiment: Text-Only Baseline
@@ -71,30 +88,74 @@ The processing pipeline consists of three main steps:
 
 ---
 
+## Refactored Code Structure
+
+The codebase has been completely refactored following software engineering best practices:
+
+```
+src/
+├── config/              # Configuration and constants
+│   └── constants.py
+├── models/              # Data structures
+│   ├── query.py
+│   ├── behavioral_data.py
+│   └── features.py
+├── io/                  # File input/output operations
+│   ├── query_reader.py
+│   ├── query_writer.py
+│   ├── behavioral_reader.py
+│   ├── behavioral_writer.py
+│   └── feature_writer.py
+├── processing/          # Core business logic
+│   ├── query_extractor.py
+│   ├── gaze_matcher.py
+│   └── feature_extractor.py
+├── quality/             # Quality analysis
+│   └── worker_analyzer.py
+├── utils/               # Shared utilities
+│   ├── timestamp.py
+│   ├── text_matching.py
+│   └── file_discovery.py
+└── pipelines/           # Pipeline orchestration
+    ├── extract_queries.py
+    ├── match_gaze.py
+    ├── extract_features.py
+    └── analyze_quality.py
+```
+
+### Key Improvements:
+- **Modular Design**: Clear separation of concerns with single-responsibility modules
+- **Readable Code**: Descriptive names that explain intent (e.g., `QueryExtractor` vs "step-1")
+- **Type Safety**: Data classes and type hints throughout
+- **Maintainability**: Easy to understand, test, and extend
+- **Configurability**: Centralized constants, no hard-coded paths
+
+---
+
 ## Data Processing Pipeline
 
 ### Step 1: Extracting Query Logs
 
--   **Script**: `step-1-extract-queries.py`
--   **Input**: A master CSV log file containing all user queries and LLM responses (`full_query_logs_table.csv`). This helps structurally organize and efficiently access the associated queries and metadata associated with each user and task combination without having to re-read our original query logs table.
--   **Process**: This script reads the master log and extracts all relevant fields for each query (`user_id`, `task_id`, `query_id`, `user_query`, `llm_response_1`, `llm_response_2`, and `query_timestamp`). It then organizes this information into a structured JSON file, grouped by user and task, and sorted by timestamp.
--   **Output**: `query_data.json`
+-   **Script**: `src/pipelines/extract_queries.py`
+-   **Input**: Master CSV log file containing all user queries and LLM responses (`full_query_logs_table.csv`)
+-   **Process**: Reads the master log and extracts all relevant fields for each query. Organizes this information into a structured JSON file, grouped by user and task, sorted by timestamp.
+-   **Output**: `output/query_data.json`
 
 ### Step 2: Matching Gaze Data with Queries
 
--   **Script**: `step-2-match-gaze-queries.py`
+-   **Script**: `src/pipelines/match_gaze.py`
 -   **Input**:
-    1.  The original `rel_*.csv` files from `user_behavior/`.
-    2.  The `query_data.json` file from Step 1.
--   **Process**: This is the core matching script. It iterates through each row of the interaction data. Using the character index and a small window of surrounding text provided in the gaze data, it finds the corresponding LLM response text in `query_data.json`. Each row is then annotated with the matched `query_id`. For non-standard entries like when the user isn't looking at the screen or when they look at our experimentally provided prompt(instructing them how to perform their tasks), I used clearly defined query_ids like -1 and -2 which don't occur in the true dataset and additional boolean flags to properly convey this binary information for better model training.
--   **Output**: The script generates new annotated CSV files with the suffix `-query_id_assigned.csv`. These files are placed in the same directory as the input files and contain the original data plus additional columns for analysis.
+    1.  The original `rel_*.csv` files from `user_behavior/`
+    2.  The `query_data.json` file from Step 1
+-   **Process**: Iterates through each row of the interaction data. Using the character index and surrounding text window, it finds the corresponding LLM response text. Each row is annotated with the matched `query_id`. Non-standard entries (not looking at screen, looking at experimental prompt) are assigned special query IDs (-2, -1).
+-   **Output**: Annotated CSV files with suffix `_query_id_assigned.csv` in the same directories as input files
 
 ### Step 3: Feature Extraction
 
--   **Script**: `src/pairwise/step-0-feature_eng_pipeline.py`
--   **Input**: The annotated `*-query_id_assigned.csv` files from Step 2
+-   **Script**: `src/pipelines/extract_features.py`
+-   **Input**: The annotated `*_query_id_assigned.csv` files from Step 2
 -   **Process**: Extracts 426 behavioral features per pairwise comparison from user gaze and mouse tracking data
--   **Output**: `extracted_features.csv` - A consolidated CSV file with one row per pairwise comparison
+-   **Output**: `output/extracted_features.csv` - Consolidated CSV with one row per comparison
 
 ---
 
@@ -118,13 +179,13 @@ The final `-query_id_assigned.csv` files contain the following columns:
 
 ## Pairwise Feature Engineering Pipeline
 
-After completing the core data processing pipeline, the project includes a specialized **pairwise feature engineering pipeline** located in `src/pairwise/` for predicting user preferences between competing LLM responses.
+After completing the core data processing pipeline, the project includes a specialized **pairwise feature engineering pipeline** for predicting user preferences between competing LLM responses.
 
 ### Overview
 
--   **Scripts**: `step-0-feature_eng_pipeline.py`, `step-1-analyze_results.py`
+-   **Script**: `src/pipelines/extract_features.py`
 -   **Objective**: Extract behavioral features from user gaze and mouse tracking data to predict which of two LLM responses a user prefers
--   **Output**: A single consolidated CSV file (`extracted_features.csv`) with one row per pairwise comparison
+-   **Output**: A single consolidated CSV file (`output/extracted_features.csv`) with one row per pairwise comparison
 
 ### Feature Categories
 
@@ -159,18 +220,23 @@ In the future, the pipeline may also predict other preference metrics, particula
 
 ```bash
 # Step 1: Extract queries from the master log
-python3 src/step-1-extract-queries.py
+python src/pipelines/extract_queries.py
 
 # Step 2: Match gaze data to queries and generate annotated files
-python3 src/step-2-match-gaze-queries.py
+python src/pipelines/match_gaze.py
 
-# Step 3: Extract pairwise behavioral features
-cd src/pairwise && python3 step-0-feature_eng_pipeline.py
+# Step 3: Extract pairwise and pointwise behavioral features
+python src/pipelines/extract_features.py
+
+# Optional: Analyze worker quality
+python src/pipelines/analyze_quality.py
 ```
 
 ### Output Files:
-- `query_data.json` - Structured query data (from Step 1)
-- `*-query_id_assigned.csv` - Annotated behavioral data files (from Step 2)
-- `extracted_features.csv` - Pairwise features for preference prediction (from Step 3)
+- `output/query_data.json` - Structured query data (from Step 1)
+- `user_behavior/*/*_query_id_assigned.csv` - Annotated behavioral data files (from Step 2)
+- `output/extracted_features.csv` - Features for preference prediction (from Step 3)
+- `output/low_quality_workers.csv` - Worker quality report (optional)
+- `output/worker_quality_report.txt` - Detailed quality analysis (optional)
 
 ---
