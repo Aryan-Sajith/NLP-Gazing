@@ -90,6 +90,10 @@ class ComparisonFeatures:
             result['normalized_likert_2'] = None
             result['binary_preference'] = None
         
+        # Add phase features if they exist
+        if hasattr(self, 'phase_features') and self.phase_features:
+            result.update(self.phase_features)
+        
         return result
     
     def _add_modality_features(self, result: dict, prefix: str, modality: ModalityFeatures):

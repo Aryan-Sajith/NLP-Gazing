@@ -9,6 +9,7 @@ from src.io.behavioral_reader import BehavioralReader
 from src.io.query_reader import QueryReader
 from src.io.feature_writer import FeatureWriter
 from src.utils.file_discovery import discover_user_task_combinations, detect_comparison_type
+from src.processing.phase_feature_extractor import PhaseFeatureExtractor
 
 
 class FeatureExtractor:
@@ -19,6 +20,7 @@ class FeatureExtractor:
         self.output_path = output_path
         self.behavioral_reader = BehavioralReader()
         self.feature_writer = FeatureWriter(output_path)
+        self.phase_extractor = PhaseFeatureExtractor(plateau_threshold_pct=0.90, min_composing_duration_s=2.0)
         
         # Load query cache
         query_reader = QueryReader(query_logs_path)
@@ -131,12 +133,35 @@ class FeatureExtractor:
                 if not response_b:
                     return None
             
+            # Extract phase features for pairwise
+            if comparison_type == 'pairwise' and response_b:
+                # Get response lengths from query data
+                left_response_length = len(query_data.get('llm_response_1', ''))
+                right_response_length = len(query_data.get('llm_response_2', ''))
+                
+                # Extract pairwise phase features
+                gaze_phase = self.phase_extractor.extract_pairwise_features(
+                    response_a.gaze_df, response_b.gaze_df, 'gaze',
+                    left_response_length, right_response_length
+                )
+                mouse_phase = self.phase_extractor.extract_pairwise_features(
+                    response_a.mouse_df, response_b.mouse_df, 'mouse',
+                    left_response_length, right_response_length
+                )
+                cross_phase = self.phase_extractor.extract_cross_modality_features(
+                    gaze_phase, mouse_phase, task_type='pairwise'
+                )
+                phase_features = {**gaze_phase, **mouse_phase, **cross_phase}
+            else:
+                # For pointwise, features already extracted
+                phase_features = getattr(response_a, 'phase_features', {})
+            
             # Parse target variables
             likert_1 = self._parse_float(query_data.get('likert_1'))
             likert_2 = self._parse_float(query_data.get('likert_2')) if comparison_type == 'pairwise' else None
             preference = self._parse_int(query_data.get('preference')) if comparison_type == 'pairwise' else None
             
-            return ComparisonFeatures(
+            comparison_features = ComparisonFeatures(
                 comparison_type=comparison_type,
                 query_id=query_id,
                 user_id=user_id,
@@ -148,6 +173,9 @@ class FeatureExtractor:
                 likert_2=likert_2,
                 preference=preference
             )
+            comparison_features.phase_features = phase_features
+            
+            return comparison_features
             
         except Exception as e:
             print(f"Error extracting features for query {query_id}: {e}")
@@ -176,7 +204,29 @@ class FeatureExtractor:
             gaze_features = self._extract_modality_features(gaze_data, response_length)
             mouse_features = self._extract_modality_features(mouse_data, response_length)
             
-            return ModalityFeatures(gaze=gaze_features, mouse=mouse_features)
+            # Extract phase features
+            import pandas as pd
+            gaze_df = pd.DataFrame([vars(d) for d in gaze_data]) if gaze_data else pd.DataFrame()
+            mouse_df = pd.DataFrame([vars(d) for d in mouse_data]) if mouse_data else pd.DataFrame()
+            
+            if comparison_type == 'pairwise':
+                # For pairwise, store the data for later combined extraction
+                modality_features = ModalityFeatures(gaze=gaze_features, mouse=mouse_features)
+                modality_features.gaze_df = gaze_df
+                modality_features.mouse_df = mouse_df
+                modality_features.response_num = response_num
+            else:
+                # For pointwise, extract phase features immediately
+                gaze_phase = self.phase_extractor.extract_pointwise_features(gaze_df, 'gaze')
+                mouse_phase = self.phase_extractor.extract_pointwise_features(mouse_df, 'mouse')
+                cross_phase = self.phase_extractor.extract_cross_modality_features(
+                    gaze_phase, mouse_phase, task_type='pointwise'
+                )
+                
+                modality_features = ModalityFeatures(gaze=gaze_features, mouse=mouse_features)
+                modality_features.phase_features = {**gaze_phase, **mouse_phase, **cross_phase}
+            
+            return modality_features
             
         except Exception as e:
             print(f"Error extracting response features: {e}")

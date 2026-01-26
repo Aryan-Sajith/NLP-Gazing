@@ -68,4 +68,90 @@ class FeatureWriter:
                 for i in range(100):
                     headers.append(f'response_{response}_{modality}_window_{i:03d}')
         
+        # Pointwise phase features (for each modality)
+        for modality in ['gaze', 'mouse']:
+            prefix = f'{modality}_'
+            headers.extend([
+                # Phase timing (8)
+                f'{prefix}reviewing_duration_s',
+                f'{prefix}composing_duration_s',
+                f'{prefix}reviewing_pct',
+                f'{prefix}composing_pct',
+                f'{prefix}plateau_time_pct',
+                f'{prefix}time_after_plateau_s',
+                f'{prefix}detection_method',
+                f'{prefix}max_char_position_reached',
+                # Activity ratios (6)
+                f'{prefix}reviewing_active_ratio',
+                f'{prefix}reviewing_offscreen_ratio',
+                f'{prefix}composing_active_ratio',
+                f'{prefix}composing_offscreen_ratio',
+                f'{prefix}composing_lookback_ratio',
+                f'{prefix}composing_thinking_ratio',
+                # Comparison features (10)
+                f'{prefix}reviewing_composing_duration_ratio',
+                f'{prefix}reviewing_composing_activity_ratio',
+                f'{prefix}composing_reviewing_activity_diff',
+                f'{prefix}offscreen_increase',
+                f'{prefix}active_time_reviewing_s',
+                f'{prefix}active_time_composing_s',
+                f'{prefix}offscreen_time_reviewing_s',
+                f'{prefix}offscreen_time_composing_s',
+                f'{prefix}lookback_time_s',
+                f'{prefix}thinking_time_s',
+            ])
+        
+        # Pairwise phase features
+        for modality in ['gaze', 'mouse']:
+            # Per-side features (left and right)
+            for side in ['left', 'right']:
+                prefix = f'{modality}_{side}_'
+                headers.extend([
+                    f'{prefix}reviewing_engaged_time_s',
+                    f'{prefix}reviewing_engaged_pct',
+                    f'{prefix}reviewing_active_ratio',
+                    f'{prefix}reviewing_offscreen_ratio',
+                    f'{prefix}max_char_position_reached',
+                    f'{prefix}composing_lookback_time_s',
+                    f'{prefix}composing_lookback_ratio',
+                ])
+            
+            # Global composing features
+            headers.extend([
+                f'{modality}_composing_duration_s',
+                f'{modality}_composing_pct',
+                f'{modality}_detection_method',
+                f'{modality}_plateau_time_pct',
+            ])
+            
+            # Comparison features
+            prefix = f'{modality}_comparison_'
+            headers.extend([
+                f'{prefix}reviewing_time_ratio',
+                f'{prefix}reviewing_time_diff',
+                f'{prefix}which_side_longer_reviewing',
+                f'{prefix}reviewing_activity_ratio',
+                f'{prefix}reviewing_activity_diff',
+                f'{prefix}which_side_more_active_reviewing',
+                f'{prefix}composing_lookback_ratio',
+                f'{prefix}composing_lookback_diff',
+                f'{prefix}which_side_read_further',
+            ])
+        
+        # Cross-modality features
+        prefix = 'cross_modality_'
+        # Pointwise cross-modality
+        headers.extend([
+            f'{prefix}reviewing_duration_ratio_gaze_mouse',
+            f'{prefix}composing_duration_ratio_gaze_mouse',
+            f'{prefix}reviewing_activity_ratio_gaze_mouse',
+            f'{prefix}composing_activity_ratio_gaze_mouse',
+        ])
+        # Pairwise cross-modality
+        headers.extend([
+            f'{prefix}left_reviewing_duration_ratio_gaze_mouse',
+            f'{prefix}right_reviewing_duration_ratio_gaze_mouse',
+            f'{prefix}preference_agreement_gaze_mouse',
+        ])
+        
         return headers
