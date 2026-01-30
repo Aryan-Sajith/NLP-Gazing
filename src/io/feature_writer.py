@@ -41,6 +41,9 @@ class FeatureWriter:
             # Metadata
             'comparison_type', 'query_id', 'user_id', 'task_id', 'user_query',
             
+            # LLM information
+            'llm_name_1', 'llm_name_2', 'llm_response_1', 'llm_response_2',
+            
             # Target variables
             'likert_1', 'likert_2', 'preference', 
             'normalized_likert_1', 'normalized_likert_2', 'binary_preference',

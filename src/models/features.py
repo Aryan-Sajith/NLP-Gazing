@@ -43,8 +43,14 @@ class ComparisonFeatures:
     task_id: str
     user_query: str
     
+    # LLM information
+    llm_name_1: Optional[str] = None
+    llm_name_2: Optional[str] = None
+    llm_response_1: Optional[str] = None
+    llm_response_2: Optional[str] = None
+    
     # Response A
-    response_a: ModalityFeatures
+    response_a: ModalityFeatures = None
     
     # Response B (None for pointwise)
     response_b: Optional[ModalityFeatures] = None
@@ -62,6 +68,10 @@ class ComparisonFeatures:
             'user_id': self.user_id,
             'task_id': self.task_id,
             'user_query': self.user_query,
+            'llm_name_1': self.llm_name_1,
+            'llm_name_2': self.llm_name_2,
+            'llm_response_1': self.llm_response_1,
+            'llm_response_2': self.llm_response_2,
         }
         
         # Add Response A features

@@ -14,9 +14,26 @@ class PhaseFeatureExtractor:
     then computes phase-specific and comparative features.
     """
     
+    # Constants for safe ratio calculation
+    EPSILON = 0.001  # Small value to avoid division by zero
+    MAX_RATIO = 100.0  # Cap ratios to avoid extreme values
+    
     def __init__(self, plateau_threshold_pct: float = 0.90, min_composing_duration_s: float = 2.0):
         """Initialize with stage detection parameters."""
         self.stage_detector = StageDetector(plateau_threshold_pct, min_composing_duration_s)
+    
+    def _safe_ratio(self, numerator: float, denominator: float) -> float:
+        """
+        Compute ratio with safeguards against division by zero and extreme values.
+        
+        Args:
+            numerator: Top value
+            denominator: Bottom value
+            
+        Returns:
+            Capped ratio, max of MAX_RATIO if denominator is very small
+        """
+        return min(numerator / (denominator + self.EPSILON), self.MAX_RATIO)
     
     def extract_pointwise_features(self, query_data: pd.DataFrame, modality: str) -> Dict[str, float]:
         """
@@ -81,15 +98,14 @@ class PhaseFeatureExtractor:
             features[f"{prefix}composing_thinking_ratio"] = 0
         
         # Comparison features (10)
-        features[f"{prefix}reviewing_composing_duration_ratio"] = (
-            metadata['reviewing_duration_s'] / metadata['composing_duration_s']
-            if metadata['composing_duration_s'] > 0 else np.inf
+        features[f"{prefix}reviewing_composing_duration_ratio"] = self._safe_ratio(
+            metadata['reviewing_duration_s'], metadata['composing_duration_s']
         )
         
         reviewing_active = features[f"{prefix}reviewing_active_ratio"]
         composing_active = features[f"{prefix}composing_active_ratio"]
-        features[f"{prefix}reviewing_composing_activity_ratio"] = (
-            reviewing_active / composing_active if composing_active > 0 else np.inf
+        features[f"{prefix}reviewing_composing_activity_ratio"] = self._safe_ratio(
+            reviewing_active, composing_active
         )
         
         features[f"{prefix}composing_reviewing_activity_diff"] = composing_active - reviewing_active
@@ -270,7 +286,7 @@ class PhaseFeatureExtractor:
         left_engaged = left_features[f"{modality}_left_reviewing_engaged_time_s"]
         right_engaged = right_features[f"{modality}_right_reviewing_engaged_time_s"]
         
-        features[f"{prefix}reviewing_time_ratio"] = (left_engaged / right_engaged) if right_engaged > 0 else np.inf
+        features[f"{prefix}reviewing_time_ratio"] = self._safe_ratio(left_engaged, right_engaged)
         features[f"{prefix}reviewing_time_diff"] = left_engaged - right_engaged
         features[f"{prefix}which_side_longer_reviewing"] = 1 if left_engaged > right_engaged else -1
         
@@ -278,7 +294,7 @@ class PhaseFeatureExtractor:
         left_active = left_features[f"{modality}_left_reviewing_active_ratio"]
         right_active = right_features[f"{modality}_right_reviewing_active_ratio"]
         
-        features[f"{prefix}reviewing_activity_ratio"] = (left_active / right_active) if right_active > 0 else np.inf
+        features[f"{prefix}reviewing_activity_ratio"] = self._safe_ratio(left_active, right_active)
         features[f"{prefix}reviewing_activity_diff"] = left_active - right_active
         features[f"{prefix}which_side_more_active_reviewing"] = 1 if left_active > right_active else -1
         
@@ -286,7 +302,7 @@ class PhaseFeatureExtractor:
         left_lookback = left_features[f"{modality}_left_composing_lookback_time_s"]
         right_lookback = right_features[f"{modality}_right_composing_lookback_time_s"]
         
-        features[f"{prefix}composing_lookback_ratio"] = (left_lookback / right_lookback) if right_lookback > 0 else np.inf
+        features[f"{prefix}composing_lookback_ratio"] = self._safe_ratio(left_lookback, right_lookback)
         features[f"{prefix}composing_lookback_diff"] = left_lookback - right_lookback
         
         # Character position comparison
@@ -319,43 +335,43 @@ class PhaseFeatureExtractor:
             # Reviewing phase correlation
             gaze_rev_dur = gaze_features.get('gaze_reviewing_duration_s', 0)
             mouse_rev_dur = mouse_features.get('mouse_reviewing_duration_s', 0)
-            features[f"{prefix}reviewing_duration_ratio_gaze_mouse"] = (
-                gaze_rev_dur / mouse_rev_dur if mouse_rev_dur > 0 else np.inf
+            features[f"{prefix}reviewing_duration_ratio_gaze_mouse"] = self._safe_ratio(
+                gaze_rev_dur, mouse_rev_dur
             )
             
             # Composing phase correlation
             gaze_comp_dur = gaze_features.get('gaze_composing_duration_s', 0)
             mouse_comp_dur = mouse_features.get('mouse_composing_duration_s', 0)
-            features[f"{prefix}composing_duration_ratio_gaze_mouse"] = (
-                gaze_comp_dur / mouse_comp_dur if mouse_comp_dur > 0 else np.inf
+            features[f"{prefix}composing_duration_ratio_gaze_mouse"] = self._safe_ratio(
+                gaze_comp_dur, mouse_comp_dur
             )
             
             # Activity correlation
             gaze_rev_active = gaze_features.get('gaze_reviewing_active_ratio', 0)
             mouse_rev_active = mouse_features.get('mouse_reviewing_active_ratio', 0)
-            features[f"{prefix}reviewing_activity_ratio_gaze_mouse"] = (
-                gaze_rev_active / mouse_rev_active if mouse_rev_active > 0 else np.inf
+            features[f"{prefix}reviewing_activity_ratio_gaze_mouse"] = self._safe_ratio(
+                gaze_rev_active, mouse_rev_active
             )
             
             gaze_comp_active = gaze_features.get('gaze_composing_active_ratio', 0)
             mouse_comp_active = mouse_features.get('mouse_composing_active_ratio', 0)
-            features[f"{prefix}composing_activity_ratio_gaze_mouse"] = (
-                gaze_comp_active / mouse_comp_active if mouse_comp_active > 0 else np.inf
+            features[f"{prefix}composing_activity_ratio_gaze_mouse"] = self._safe_ratio(
+                gaze_comp_active, mouse_comp_active
             )
         
         else:  # pairwise
             # Left side gaze/mouse correlation
-            gaze_left_rev = gaze_features.get('gaze_left_reviewing_duration_s', 0)
-            mouse_left_rev = mouse_features.get('mouse_left_reviewing_duration_s', 0)
-            features[f"{prefix}left_reviewing_duration_ratio_gaze_mouse"] = (
-                gaze_left_rev / mouse_left_rev if mouse_left_rev > 0 else np.inf
+            gaze_left_rev = gaze_features.get('gaze_left_reviewing_engaged_time_s', 0)
+            mouse_left_rev = mouse_features.get('mouse_left_reviewing_engaged_time_s', 0)
+            features[f"{prefix}left_reviewing_duration_ratio_gaze_mouse"] = self._safe_ratio(
+                gaze_left_rev, mouse_left_rev
             )
             
             # Right side gaze/mouse correlation
-            gaze_right_rev = gaze_features.get('gaze_right_reviewing_duration_s', 0)
-            mouse_right_rev = mouse_features.get('mouse_right_reviewing_duration_s', 0)
-            features[f"{prefix}right_reviewing_duration_ratio_gaze_mouse"] = (
-                gaze_right_rev / mouse_right_rev if mouse_right_rev > 0 else np.inf
+            gaze_right_rev = gaze_features.get('gaze_right_reviewing_engaged_time_s', 0)
+            mouse_right_rev = mouse_features.get('mouse_right_reviewing_engaged_time_s', 0)
+            features[f"{prefix}right_reviewing_duration_ratio_gaze_mouse"] = self._safe_ratio(
+                gaze_right_rev, mouse_right_rev
             )
             
             # Which modality shows stronger left preference
