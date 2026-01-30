@@ -8,7 +8,7 @@ def parse_utc_timestamp(timestamp_str: str) -> Optional[int]:
     """
     Parse UTC timestamp to Unix milliseconds.
     
-    The query_timestamp field in full_query_logs_table.csv is in UTC.
+    The query_timestamp field in query_logs_table.csv is in UTC.
     We explicitly mark it as UTC to ensure correct conversion regardless
     of the system timezone where this script runs.
     

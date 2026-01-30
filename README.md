@@ -23,13 +23,13 @@ python src/pipelines/analyze_quality.py
 ## 📁 Required Files and Folder Structure
 
 ### Input Files Required:
-1. **`full_query_logs_table.csv`** - Master CSV log file containing all user queries and LLM responses (place in project root)
+1. **`query_logs_table.csv`** - Master CSV log file containing all user queries and LLM responses (place in project root)
 2. **User behavioral data** - Raw `rel_*.csv` files (gaze and mouse tracking data) in `user_behavior/` directory
 
 ### Folder Structure:
 ```
 project_root/
-├── full_query_logs_table.csv    # Required: Master query logs
+├── query_logs_table.csv    # Required: Master query logs
 ├── user_behavior/                # Required: Behavioral data directory
 │   └── {user_id}/               # Each user has their own subdirectory
 │       └── {task_id}/           # Task-specific directories
@@ -137,7 +137,7 @@ src/
 ### Step 1: Extracting Query Logs
 
 -   **Script**: `src/pipelines/extract_queries.py`
--   **Input**: Master CSV log file containing all user queries and LLM responses (`full_query_logs_table.csv`)
+-   **Input**: Master CSV log file containing all user queries and LLM responses (`query_logs_table.csv`)
 -   **Process**: Reads the master log and extracts all relevant fields for each query. Organizes this information into a structured JSON file, grouped by user and task, sorted by timestamp.
 -   **Output**: `output/query_data.json`
 

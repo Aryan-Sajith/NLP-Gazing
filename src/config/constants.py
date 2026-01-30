@@ -6,7 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "user_behavior"
 OUTPUT_DIR = PROJECT_ROOT / "output"
-QUERY_LOGS_FILE = PROJECT_ROOT / "full_query_logs_table.csv"
+QUERY_LOGS_FILE = PROJECT_ROOT / "query_logs_table.csv"
 
 # Special query IDs for non-standard entries
 QUERY_ID_NOT_LOOKING = -2  # User not looking at screen (x=-1, y=-1)

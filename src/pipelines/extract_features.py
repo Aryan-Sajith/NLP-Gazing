@@ -6,7 +6,11 @@ Extracts behavioral features from annotated gaze and mouse data for
 pairwise and pointwise comparisons.
 
 Usage:
+    source venv/bin/activate  # Activate virtual environment first
     python src/pipelines/extract_features.py
+    
+Or run directly:
+    ./venv/bin/python src/pipelines/extract_features.py
 """
 
 import sys

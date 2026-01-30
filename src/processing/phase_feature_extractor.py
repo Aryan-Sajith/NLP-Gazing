@@ -159,7 +159,10 @@ class PhaseFeatureExtractor:
             return self._empty_pairwise_features(modality)
         
         # Global timeline (same for both sides)
-        merged_data = pd.concat([left_data, right_data], ignore_index=True).sort_values('rel_ts')
+        merged_data = pd.concat([left_data, right_data], ignore_index=True)
+        if len(merged_data) == 0 or 'rel_ts' not in merged_data.columns:
+            return self._empty_pairwise_features(modality)
+        merged_data = merged_data.sort_values('rel_ts')
         global_start = merged_data['rel_ts'].min()
         global_end = merged_data['rel_ts'].max()
         total_duration_s = metadata['total_duration_s']

@@ -42,7 +42,7 @@ class StageDetector:
             3. Choose boundary based on time remaining after last reading
             4. Return boundary timestamp and metadata
         """
-        if len(query_data) == 0:
+        if len(query_data) == 0 or 'rel_ts' not in query_data.columns:
             return None, {'error': 'empty_data'}
         
         query_data = query_data.copy().sort_values('rel_ts').reset_index(drop=True)
@@ -145,17 +145,26 @@ class StageDetector:
         Returns:
             Tuple of (boundary_timestamp, metadata_dict)
         """
+        # Check if both DataFrames are empty or missing columns
+        if (len(left_data) == 0 or 'rel_ts' not in left_data.columns) and (len(right_data) == 0 or 'rel_ts' not in right_data.columns):
+            return None, {'error': 'empty_data'}
+        
         # Tag data to distinguish left from right before merging
-        left_tagged = left_data.copy()
-        left_tagged['_side'] = 'left'
-        right_tagged = right_data.copy()
-        right_tagged['_side'] = 'right'
+        left_tagged = left_data.copy() if len(left_data) > 0 else pd.DataFrame()
+        if len(left_tagged) > 0:
+            left_tagged['_side'] = 'left'
+        
+        right_tagged = right_data.copy() if len(right_data) > 0 else pd.DataFrame()
+        if len(right_tagged) > 0:
+            right_tagged['_side'] = 'right'
         
         # Merge both datasets
-        merged_data = pd.concat([left_tagged, right_tagged], ignore_index=True).sort_values('rel_ts')
+        merged_data = pd.concat([left_tagged, right_tagged], ignore_index=True)
         
-        if len(merged_data) == 0:
+        if len(merged_data) == 0 or 'rel_ts' not in merged_data.columns:
             return None, {'error': 'empty_data'}
+        
+        merged_data = merged_data.sort_values('rel_ts')
         
         start_time = merged_data['rel_ts'].min()
         end_time = merged_data['rel_ts'].max()
@@ -268,6 +277,10 @@ class StageDetector:
         Returns:
             Tuple of (reviewing_data, composing_data)
         """
+        # Handle empty DataFrame or missing columns
+        if len(query_data) == 0 or 'rel_ts' not in query_data.columns:
+            return pd.DataFrame(), pd.DataFrame()
+        
         query_data = query_data.sort_values('rel_ts')
         reviewing_data = query_data[query_data['rel_ts'] < boundary_time].copy()
         composing_data = query_data[query_data['rel_ts'] >= boundary_time].copy()
