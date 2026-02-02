@@ -55,3 +55,35 @@ class BehavioralReader:
             print(f"Warning: Error loading {file_path}: {e}")
         
         return data
+    
+    def read_full_csv(self, file_path: Path) -> List[BehavioralDataPoint]:
+        """
+        Read annotated CSV without filtering by query_id (for new timeline-based approach).
+        
+        Args:
+            file_path: Path to annotated CSV file
+        
+        Returns:
+            List of all behavioral data points in file
+        """
+        data = []
+        
+        try:
+            if not file_path.exists():
+                return data
+            
+            with open(file_path, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    query_id = int(row.get('query_id', -1))
+                    is_exp_text = row.get('is_experimental_text', '').lower() == 'true'
+                    is_not_looking = row.get('is_not_looking', '').lower() == 'true'
+                    
+                    point = BehavioralDataPoint.from_csv_row(row, query_id, is_exp_text, is_not_looking)
+                    if point:
+                        data.append(point)
+                        
+        except Exception as e:
+            print(f"Warning: Error loading {file_path}: {e}")
+        
+        return data

@@ -75,13 +75,11 @@ class FeatureWriter:
         for modality in ['gaze', 'mouse']:
             prefix = f'{modality}_'
             headers.extend([
-                # Phase timing (8)
+                # Phase timing (6)
                 f'{prefix}reviewing_duration_s',
                 f'{prefix}composing_duration_s',
                 f'{prefix}reviewing_pct',
                 f'{prefix}composing_pct',
-                f'{prefix}plateau_time_pct',
-                f'{prefix}time_after_plateau_s',
                 f'{prefix}detection_method',
                 f'{prefix}max_char_position_reached',
                 # Activity ratios (6)
@@ -124,7 +122,6 @@ class FeatureWriter:
                 f'{modality}_composing_duration_s',
                 f'{modality}_composing_pct',
                 f'{modality}_detection_method',
-                f'{modality}_plateau_time_pct',
             ])
             
             # Comparison features

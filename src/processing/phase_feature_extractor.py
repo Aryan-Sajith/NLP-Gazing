@@ -10,17 +10,16 @@ class PhaseFeatureExtractor:
     """
     Extract behavioral features separately for reviewing and composing phases.
     
-    This extractor identifies the boundary between phases using StageDetector,
-    then computes phase-specific and comparative features.
+    New approach (Feb 2026): Works with full timeline, detects all query phases at once.
     """
     
     # Constants for safe ratio calculation
     EPSILON = 0.001  # Small value to avoid division by zero
     MAX_RATIO = 100.0  # Cap ratios to avoid extreme values
     
-    def __init__(self, plateau_threshold_pct: float = 0.90, min_composing_duration_s: float = 2.0):
-        """Initialize with stage detection parameters."""
-        self.stage_detector = StageDetector(plateau_threshold_pct, min_composing_duration_s)
+    def __init__(self):
+        """Initialize with new timeline-based stage detector."""
+        self.stage_detector = StageDetector()
     
     def _safe_ratio(self, numerator: float, denominator: float) -> float:
         """
@@ -35,12 +34,13 @@ class PhaseFeatureExtractor:
         """
         return min(numerator / (denominator + self.EPSILON), self.MAX_RATIO)
     
-    def extract_pointwise_features(self, query_data: pd.DataFrame, modality: str) -> Dict[str, float]:
+    def extract_query_features(self, full_data: pd.DataFrame, query_id: int, modality: str) -> Dict[str, float]:
         """
-        Extract phase features for pointwise tasks (single LLM response).
+        Extract phase features for a single query from full timeline.
         
         Args:
-            query_data: DataFrame with behavioral data
+            full_data: Full DataFrame with all behavioral data (not filtered)
+            query_id: Query ID to extract features for
             modality: 'gaze' or 'mouse'
             
         Returns:
@@ -49,25 +49,35 @@ class PhaseFeatureExtractor:
         features = {}
         prefix = f"{modality}_"
         
-        # Detect phase boundary
-        boundary_time, metadata = self.stage_detector.detect_boundary(query_data)
+        # Get phases for all queries
+        all_phases = self.stage_detector.detect_query_phases(full_data)
         
-        if boundary_time is None:
-            # Return empty features on error
+        if query_id not in all_phases:
             return self._empty_pointwise_features(prefix)
         
-        # Split into phases
-        reviewing_data, composing_data = self.stage_detector.split_phases(query_data, boundary_time)
+        phase_info = all_phases[query_id]
         
-        # Phase timing features (8)
-        features[f"{prefix}reviewing_duration_s"] = metadata['reviewing_duration_s']
-        features[f"{prefix}composing_duration_s"] = metadata['composing_duration_s']
-        features[f"{prefix}reviewing_pct"] = (metadata['reviewing_duration_s'] / metadata['total_duration_s'] * 100) if metadata['total_duration_s'] > 0 else 0
-        features[f"{prefix}composing_pct"] = metadata['composing_pct']
-        features[f"{prefix}plateau_time_pct"] = metadata.get('plateau_time_pct', 0)
-        features[f"{prefix}time_after_plateau_s"] = metadata['composing_duration_s']
-        features[f"{prefix}detection_method"] = self._encode_method(metadata['method'])
-        features[f"{prefix}max_char_position_reached"] = metadata.get('max_char_position', 0)
+        # Split data into reviewing and composing for THIS query
+        reviewing_data, composing_data = self.stage_detector.split_phases(
+            full_data,
+            phase_info['composing_start'],
+            phase_info['composing_end'],
+            phase_info['reviewing_start'],
+            phase_info['reviewing_end']
+        )
+        
+        # Calculate durations
+        reviewing_duration_s = (phase_info['reviewing_end'] - phase_info['reviewing_start']) / 1000
+        composing_duration_s = (phase_info['composing_end'] - phase_info['composing_start']) / 1000
+        total_duration_s = reviewing_duration_s + composing_duration_s
+        
+        # Phase timing features (6)
+        features[f"{prefix}reviewing_duration_s"] = reviewing_duration_s
+        features[f"{prefix}composing_duration_s"] = composing_duration_s
+        features[f"{prefix}reviewing_pct"] = (reviewing_duration_s / total_duration_s * 100) if total_duration_s > 0 else 0
+        features[f"{prefix}composing_pct"] = (composing_duration_s / total_duration_s * 100) if total_duration_s > 0 else 0
+        features[f"{prefix}detection_method"] = 1  # Timeline-based detection
+        features[f"{prefix}max_char_position_reached"] = self._get_max_char_pos(reviewing_data)
         
         # Activity ratio features (6)
         if len(reviewing_data) > 0:
@@ -81,16 +91,23 @@ class PhaseFeatureExtractor:
             features[f"{prefix}composing_active_ratio"] = (~composing_data['is_not_looking']).mean()
             features[f"{prefix}composing_offscreen_ratio"] = composing_data['is_not_looking'].mean()
             
-            # Lookback = looking at experimental text during composing
-            features[f"{prefix}composing_lookback_ratio"] = (
-                composing_data['is_experimental_text'].sum() / len(composing_data)
-            ) if len(composing_data) > 0 else 0
-            
-            # "Thinking" = looking at screen but not at experimental text
-            thinking_time = composing_data[
-                ~composing_data['is_not_looking'] & ~composing_data['is_experimental_text']
+            # Lookback = looking at text from current or previous query during composing
+            # During composing phase, user might be looking at previous response
+            lookback_data = composing_data[
+                (composing_data['centre_idx'].notna()) &
+                (composing_data['centre_idx'] != -1)
             ]
-            features[f"{prefix}composing_thinking_ratio"] = len(thinking_time) / len(composing_data) if len(composing_data) > 0 else 0
+            features[f"{prefix}composing_lookback_ratio"] = len(lookback_data) / len(composing_data) if len(composing_data) > 0 else 0
+            
+            # "Thinking" = looking at screen but not at text
+            thinking_time = composing_data[
+                composing_data['is_not_looking'] == False
+            ]
+            thinking_not_reading = thinking_time[
+                (thinking_time['centre_idx'].isna()) | 
+                (thinking_time['centre_idx'] == -1)
+            ]
+            features[f"{prefix}composing_thinking_ratio"] = len(thinking_not_reading) / len(composing_data) if len(composing_data) > 0 else 0
         else:
             features[f"{prefix}composing_active_ratio"] = 0
             features[f"{prefix}composing_offscreen_ratio"] = 0
@@ -99,7 +116,7 @@ class PhaseFeatureExtractor:
         
         # Comparison features (10)
         features[f"{prefix}reviewing_composing_duration_ratio"] = self._safe_ratio(
-            metadata['reviewing_duration_s'], metadata['composing_duration_s']
+            reviewing_duration_s, composing_duration_s
         )
         
         reviewing_active = features[f"{prefix}reviewing_active_ratio"]
@@ -114,66 +131,87 @@ class PhaseFeatureExtractor:
         composing_offscreen = features[f"{prefix}composing_offscreen_ratio"]
         features[f"{prefix}offscreen_increase"] = composing_offscreen - reviewing_offscreen
         
-        features[f"{prefix}active_time_reviewing_s"] = metadata['reviewing_duration_s'] * reviewing_active
-        features[f"{prefix}active_time_composing_s"] = metadata['composing_duration_s'] * composing_active
+        features[f"{prefix}active_time_reviewing_s"] = reviewing_duration_s * reviewing_active
+        features[f"{prefix}active_time_composing_s"] = composing_duration_s * composing_active
         
-        features[f"{prefix}offscreen_time_reviewing_s"] = metadata['reviewing_duration_s'] * reviewing_offscreen
-        features[f"{prefix}offscreen_time_composing_s"] = metadata['composing_duration_s'] * composing_offscreen
+        features[f"{prefix}offscreen_time_reviewing_s"] = reviewing_duration_s * reviewing_offscreen
+        features[f"{prefix}offscreen_time_composing_s"] = composing_duration_s * composing_offscreen
         
-        features[f"{prefix}lookback_time_s"] = metadata['composing_duration_s'] * features[f"{prefix}composing_lookback_ratio"]
-        features[f"{prefix}thinking_time_s"] = metadata['composing_duration_s'] * features[f"{prefix}composing_thinking_ratio"]
+        features[f"{prefix}lookback_time_s"] = composing_duration_s * features[f"{prefix}composing_lookback_ratio"]
+        features[f"{prefix}thinking_time_s"] = composing_duration_s * features[f"{prefix}composing_thinking_ratio"]
         
         return features
+    
+    def _get_max_char_pos(self, data: pd.DataFrame) -> float:
+        """Get maximum character position from data."""
+        if len(data) == 0:
+            return 0
+        valid = data[(data['centre_idx'].notna()) & (data['centre_idx'] != -1)]
+        return valid['centre_idx'].max() if len(valid) > 0 else 0
+    
+    # ==================== PAIRWISE METHODS (Timeline approach with ORIGINAL feature names) ====================
     
     def extract_pairwise_features(self, 
                                   left_data: pd.DataFrame, 
                                   right_data: pd.DataFrame,
                                   modality: str,
                                   left_response_length: int,
-                                  right_response_length: int) -> Dict[str, float]:
+                                  right_response_length: int,
+                                  left_query_id: Optional[int] = None,
+                                  right_query_id: Optional[int] = None) -> Dict[str, float]:
         """
-        Extract phase features for pairwise tasks (comparing two LLM responses).
+        Extract phase features for pairwise tasks using NEW timeline-based boundary detection.
         
-        For pairwise, user reviews BOTH responses together, then composes.
-        We detect ONE boundary that applies to both left and right.
-        All times are relative to the global comparison timeline.
+        Uses detect_query_phases() on merged timeline instead of quantile(0.5) midpoint.
+        Keeps SAME feature names as before.
         
         Args:
-            left_data: DataFrame for left response
-            right_data: DataFrame for right response
+            left_data: FULL DataFrame for left response (not filtered)
+            right_data: FULL DataFrame for right response (not filtered)
             modality: 'gaze' or 'mouse'
             left_response_length: Character length of left response
             right_response_length: Character length of right response
+            left_query_id: Optional query ID for left response
+            right_query_id: Optional query ID for right response
             
         Returns:
             Dictionary of features with prefixes {modality}_left_, {modality}_right_, {modality}_comparison_
         """
         features = {}
         
-        # Detect SINGLE boundary using merged data
-        boundary_time, metadata = self.stage_detector.detect_pairwise_boundary(
-            left_data, right_data, left_response_length, right_response_length
-        )
-        
-        if boundary_time is None:
-            return self._empty_pairwise_features(modality)
-        
-        # Global timeline (same for both sides)
+        # Merge left and right into ONE timeline
         merged_data = pd.concat([left_data, right_data], ignore_index=True)
         if len(merged_data) == 0 or 'rel_ts' not in merged_data.columns:
             return self._empty_pairwise_features(modality)
-        merged_data = merged_data.sort_values('rel_ts')
-        global_start = merged_data['rel_ts'].min()
-        global_end = merged_data['rel_ts'].max()
-        total_duration_s = metadata['total_duration_s']
-        reviewing_duration_s = metadata['reviewing_duration_s']
-        composing_duration_s = metadata['composing_duration_s']
         
-        # Split BOTH left and right at the SAME boundary
-        left_reviewing, left_composing = self.stage_detector.split_phases(left_data, boundary_time)
-        right_reviewing, right_composing = self.stage_detector.split_phases(right_data, boundary_time)
+        merged_data = merged_data.sort_values('rel_ts').reset_index(drop=True)
         
-        # Extract per-side features during reviewing phase
+        # NEW: Detect phases on MERGED timeline using timeline approach
+        all_phases = self.stage_detector.detect_query_phases(merged_data)
+        
+        if len(all_phases) == 0:
+            return self._empty_pairwise_features(modality)
+        
+        # Find OVERALL boundaries (earliest reviewing start, latest reviewing end)
+        reviewing_starts = [p['reviewing_start'] for p in all_phases.values()]
+        reviewing_ends = [p['reviewing_end'] for p in all_phases.values()]
+        composing_starts = [p['composing_start'] for p in all_phases.values()]
+        composing_ends = [p['composing_end'] for p in all_phases.values()]
+        
+        boundary_time = max(reviewing_ends)  # End of reviewing = start of composing
+        
+        total_duration_s = (merged_data['rel_ts'].max() - merged_data['rel_ts'].min()) / 1000
+        reviewing_duration_s = (boundary_time - merged_data['rel_ts'].min()) / 1000
+        composing_duration_s = (merged_data['rel_ts'].max() - boundary_time) / 1000
+        composing_pct = (composing_duration_s / total_duration_s * 100) if total_duration_s > 0 else 0
+        
+        # Split BOTH left and right at the SAME boundary (like before, but boundary from timeline not midpoint)
+        left_reviewing = left_data[left_data['rel_ts'] < boundary_time].copy() if len(left_data) > 0 else pd.DataFrame()
+        left_composing = left_data[left_data['rel_ts'] >= boundary_time].copy() if len(left_data) > 0 else pd.DataFrame()
+        right_reviewing = right_data[right_data['rel_ts'] < boundary_time].copy() if len(right_data) > 0 else pd.DataFrame()
+        right_composing = right_data[right_data['rel_ts'] >= boundary_time].copy() if len(right_data) > 0 else pd.DataFrame()
+        
+        # Extract per-side features during reviewing phase (SAME function as before)
         left_features = self._extract_pairwise_side_features(
             left_reviewing, left_composing, 
             total_duration_s, reviewing_duration_s, composing_duration_s,
@@ -190,11 +228,10 @@ class PhaseFeatureExtractor:
         
         # Global composing features (shared, not per-side)
         features[f"{modality}_composing_duration_s"] = composing_duration_s
-        features[f"{modality}_composing_pct"] = metadata['composing_pct']
-        features[f"{modality}_detection_method"] = self._encode_method(metadata['method'])
-        features[f"{modality}_plateau_time_pct"] = metadata.get('plateau_time_pct', 0)
+        features[f"{modality}_composing_pct"] = composing_pct
+        features[f"{modality}_detection_method"] = 1  # Timeline-based detection
         
-        # Comparison features between left and right
+        # Comparison features between left and right (SAME function as before)
         comparison_features = self._extract_pairwise_comparison_features(
             left_features, right_features, f"{modality}"
         )
@@ -316,6 +353,7 @@ class PhaseFeatureExtractor:
         
         return features
     
+    
     def extract_cross_modality_features(self,
                                        gaze_features: Dict[str, float],
                                        mouse_features: Dict[str, float],
@@ -378,24 +416,13 @@ class PhaseFeatureExtractor:
             )
             
             # Which modality shows stronger left preference
-            gaze_pref = gaze_features.get('gaze_comparison_reviewing_duration_ratio', 1)
-            mouse_pref = mouse_features.get('mouse_comparison_reviewing_duration_ratio', 1)
+            gaze_pref = gaze_features.get('gaze_comparison_reviewing_time_ratio', 1)
+            mouse_pref = mouse_features.get('mouse_comparison_reviewing_time_ratio', 1)
             features[f"{prefix}preference_agreement_gaze_mouse"] = (
                 1 if (gaze_pref > 1 and mouse_pref > 1) or (gaze_pref < 1 and mouse_pref < 1) else -1
             )
         
         return features
-    
-    def _encode_method(self, method: str) -> int:
-        """Encode detection method as numeric feature."""
-        method_encoding = {
-            'last_reading_after_plateau': 1,
-            'plateau_preferred': 2,
-            'plateau_then_no_reading': 3,
-            'plateau_at_end': 4,
-            'no_reading_detected': 5
-        }
-        return method_encoding.get(method, 0)
     
     def _empty_pointwise_features(self, prefix: str) -> Dict[str, float]:
         """Return empty feature dict for error cases."""
@@ -404,8 +431,6 @@ class PhaseFeatureExtractor:
             f"{prefix}composing_duration_s": 0,
             f"{prefix}reviewing_pct": 0,
             f"{prefix}composing_pct": 0,
-            f"{prefix}plateau_time_pct": 0,
-            f"{prefix}time_after_plateau_s": 0,
             f"{prefix}detection_method": 0,
             f"{prefix}max_char_position_reached": 0,
             f"{prefix}reviewing_active_ratio": 0,
@@ -447,8 +472,7 @@ class PhaseFeatureExtractor:
         features.update({
             f"{modality}_composing_duration_s": 0,
             f"{modality}_composing_pct": 0,
-            f"{modality}_detection_method": 0,
-            f"{modality}_plateau_time_pct": 0
+            f"{modality}_detection_method": 0
         })
         
         # Comparison features

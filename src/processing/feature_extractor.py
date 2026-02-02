@@ -20,7 +20,7 @@ class FeatureExtractor:
         self.output_path = output_path
         self.behavioral_reader = BehavioralReader()
         self.feature_writer = FeatureWriter(output_path)
-        self.phase_extractor = PhaseFeatureExtractor(plateau_threshold_pct=0.90, min_composing_duration_s=2.0)
+        self.phase_extractor = PhaseFeatureExtractor()
         
         # Load query cache
         query_reader = QueryReader(query_logs_path)
@@ -195,42 +195,62 @@ class FeatureExtractor:
                 user_id, task_id, comparison_type, response_num
             )
             
-            # Load behavioral data
-            gaze_data = self.behavioral_reader.read_annotated_csv(gaze_file, query_id)
-            mouse_data = self.behavioral_reader.read_annotated_csv(mouse_file, query_id)
-            
             response_length = len(response_text) if response_text else 0
             
             if response_length == 0:
                 return None
             
-            # Extract features for both modalities
-            gaze_features = self._extract_modality_features(gaze_data, response_length)
-            mouse_features = self._extract_modality_features(mouse_data, response_length)
-            
-            # Extract phase features
             import pandas as pd
-            gaze_df = pd.DataFrame([vars(d) for d in gaze_data]) if gaze_data else pd.DataFrame()
-            mouse_df = pd.DataFrame([vars(d) for d in mouse_data]) if mouse_data else pd.DataFrame()
             
-            if comparison_type == 'pairwise':
-                # For pairwise, store the data for later combined extraction
-                modality_features = ModalityFeatures(gaze=gaze_features, mouse=mouse_features)
-                modality_features.gaze_df = gaze_df
-                modality_features.mouse_df = mouse_df
-                modality_features.response_num = response_num
-            else:
-                # For pointwise, extract phase features immediately
-                gaze_phase = self.phase_extractor.extract_pointwise_features(gaze_df, 'gaze')
-                mouse_phase = self.phase_extractor.extract_pointwise_features(mouse_df, 'mouse')
+            if comparison_type == 'pointwise':
+                # NEW: For pointwise, read full file and extract using timeline approach
+                gaze_data_full = self.behavioral_reader.read_full_csv(gaze_file)
+                mouse_data_full = self.behavioral_reader.read_full_csv(mouse_file)
+                
+                # Convert to DataFrames
+                gaze_df = pd.DataFrame([vars(d) for d in gaze_data_full]) if gaze_data_full else pd.DataFrame()
+                mouse_df = pd.DataFrame([vars(d) for d in mouse_data_full]) if mouse_data_full else pd.DataFrame()
+                
+                # Extract behavioral features (still need these from filtered data)
+                gaze_data_filtered = self.behavioral_reader.read_annotated_csv(gaze_file, query_id)
+                mouse_data_filtered = self.behavioral_reader.read_annotated_csv(mouse_file, query_id)
+                gaze_features = self._extract_modality_features(gaze_data_filtered, response_length)
+                mouse_features = self._extract_modality_features(mouse_data_filtered, response_length)
+                
+                # Extract phase features using full timeline
+                gaze_phase = self.phase_extractor.extract_query_features(gaze_df, query_id, 'gaze')
+                mouse_phase = self.phase_extractor.extract_query_features(mouse_df, query_id, 'mouse')
                 cross_phase = self.phase_extractor.extract_cross_modality_features(
                     gaze_phase, mouse_phase, task_type='pointwise'
                 )
                 
                 modality_features = ModalityFeatures(gaze=gaze_features, mouse=mouse_features)
                 modality_features.phase_features = {**gaze_phase, **mouse_phase, **cross_phase}
+                
+                return modality_features
             
-            return modality_features
+            else:
+                # Pairwise: Read full files (like pointwise)
+                gaze_data_full = self.behavioral_reader.read_full_csv(gaze_file)
+                mouse_data_full = self.behavioral_reader.read_full_csv(mouse_file)
+                
+                # Convert to DataFrames
+                gaze_df = pd.DataFrame([vars(d) for d in gaze_data_full]) if gaze_data_full else pd.DataFrame()
+                mouse_df = pd.DataFrame([vars(d) for d in mouse_data_full]) if mouse_data_full else pd.DataFrame()
+                
+                # Still need filtered data for basic behavioral features
+                gaze_data_filtered = self.behavioral_reader.read_annotated_csv(gaze_file, query_id)
+                mouse_data_filtered = self.behavioral_reader.read_annotated_csv(mouse_file, query_id)
+                gaze_features = self._extract_modality_features(gaze_data_filtered, response_length)
+                mouse_features = self._extract_modality_features(mouse_data_filtered, response_length)
+                
+                # Store full DataFrames for pairwise phase extraction
+                modality_features = ModalityFeatures(gaze=gaze_features, mouse=mouse_features)
+                modality_features.gaze_df = gaze_df
+                modality_features.mouse_df = mouse_df
+                modality_features.response_num = response_num
+                
+                return modality_features
             
         except Exception as e:
             print(f"Error extracting response features: {e}")

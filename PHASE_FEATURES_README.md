@@ -13,31 +13,29 @@ We detect this transition point and extract separate behavioral features for eac
 
 ## Phase Detection Method
 
-We use a **hybrid method** combining two signals:
+We use a **timeline-based approach** that analyzes the full behavioral timeline:
 
-1. **Character Position Plateau**: When user reaches ~90% through the response
-2. **Last Reading Activity**: The final moment user actively looked at text
+**Algorithm**:
+1. Read full behavioral file (not filtered by query_id)
+2. Identify all queries in chronological order
+3. For each query:
+   - **Reviewing phase**: First to last valid `centre_idx` timestamp (when user is looking at text)
+   - **Composing phase**: Time after previous query ended until reviewing starts (or before first query)
+4. Boundaries based on actual reading activity, not arbitrary percentages
 
-**Algorithm**: Find when user reaches 90% → track last reading point → if user spent ≥2s after last reading, use that as boundary; otherwise use 90% plateau point.
-
-**Fallback**: If user never reaches 90%, use maximum position actually reached as plateau.
-
-**Validation** (303 queries, 24 users, 99 tasks):
-- Median composing time: 25 seconds
-- Mean composing time: 48 seconds
-- Detects two user types: "quick composers" (8.5s) vs "deliberate composers" (68s)
+**Key insight**: Composing happens BETWEEN queries, not after reaching a percentage threshold. Users compose their next query after finishing the previous response.
 
 ---
 
 ## Extracted Features
 
-We extract **52 new features for pointwise** and **~45 new features for pairwise** tasks (added to existing 426 features).
+We extract **48 new features for pointwise** and **~42 new features for pairwise** tasks (added to existing 426 features).
 
 ### Pointwise Features
 
-**Phase Timing** (8 features per modality):
+**Phase Timing** (6 features per modality):
 - Duration and percentage of reviewing vs composing
-- Detection method and plateau timing
+- Detection method (1 = timeline-based)
 - Max character position reached
 
 **Activity Metrics** (6 features per modality):
@@ -55,42 +53,26 @@ We extract **52 new features for pointwise** and **~45 new features for pairwise
 
 ## How Pairwise is Handled
 
-For **pairwise** tasks, users compare two LLM responses (left vs right) **simultaneously**. Key difference from pointwise: **ONE global timeline with per-side engagement tracking**.
+For **pairwise** tasks, users compare two LLM responses (left vs right) simultaneously. We use **one global timeline** to detect phase boundaries consistently across both responses.
 
 ### Global Timeline Approach
 
-**Single Boundary Detection**:
-1. Merge left + right data into one timeline
-2. Find 90% plateau considering BOTH responses:
-   - Both reach 90% → use LAST timestamp (finished reading both)
-   - Only one reaches 90% → use that timestamp
-   - Neither reaches 90% → use max position reached
-3. Find last reading activity on merged data
-4. Split both left and right at same boundary
+**Boundary Detection**:
+1. Merge left + right behavioral data into a single timeline
+2. Apply timeline-based phase detection to the merged data
+3. Use the latest reviewing end time across all queries as the global boundary
+4. Split both left and right responses at the same boundary point
 
-**Example Timeline**:
-```
-0s ────────────────── 80s ──── 95s
-    Reviewing (global)   Composing
-    ↓                    ↓
-    User switches        User rates &
-    between left/right   composes
-```
+This ensures both responses share the same reviewing/composing phases, avoiding overlapping timelines.
 
 ### Per-Side Engagement Calculation
 
-During the global reviewing phase (0-80s), we calculate **actual engaged time** on each side using windowing:
+During the global reviewing phase, we calculate **actual engaged time** on each side separately:
 
-**Method**: Sum of active intervals (like `focused_engagement` in original features)
-- Track when user looks at left data vs right data
-- Calculate engaged time by summing intervals < INACTIVITY_THRESHOLD
-- These times can sum to ≤ global reviewing duration
-
-**Example**:
-- Global reviewing: 80s
-- Left engaged time: 45s (56% of reviewing time)
-- Right engaged time: 30s (38% of reviewing time)
-- Remaining: 5s offscreen/switching
+- Track when user looks at left vs right response data
+- Sum active intervals (< INACTIVITY_THRESHOLD) for each side
+- Per-side engaged times sum to ≤ total reviewing duration
+- Difference indicates relative preference between responses
 
 ### Pairwise Feature Structure
 
@@ -101,11 +83,10 @@ During the global reviewing phase (0-80s), we calculate **actual engaged time** 
 - `{mod}_{side}_reviewing_offscreen_ratio`: Offscreen proportion
 - `{mod}_{side}_max_char_position_reached`: Furthest character read
 
-**Global Composing** (4 features × 2 modalities = 8 features):
+**Global Composing** (3 features × 2 modalities = 6 features):
 - `{mod}_composing_duration_s`: Total composing time (shared)
 - `{mod}_composing_pct`: Composing / total
-- `{mod}_detection_method`: Which method used
-- `{mod}_plateau_time_pct`: When reached plateau
+- `{mod}_detection_method`: Timeline-based detection (1)
 
 **Per-Side Lookback** (2 features × 2 sides × 2 modalities = 8 features):
 - `{mod}_{side}_composing_lookback_time_s`: Looked back at this side
@@ -126,14 +107,6 @@ During the global reviewing phase (0-80s), we calculate **actual engaged time** 
 - Gaze vs mouse correlation
 - Preference agreement between modalities
 
-### Why This Approach?
-
-**Problem with separate timelines**: Left (0-80s) and right (30-80s) would overlap and sum incorrectly.
-
-**Solution**: Global phases + per-side engagement metrics properly represent reality:
-- ONE reviewing phase where user switches between responses
-- Engaged time on each side sums to ≤ total reviewing time
-- Clear preference signal from relative engagement
 
 ---
 
