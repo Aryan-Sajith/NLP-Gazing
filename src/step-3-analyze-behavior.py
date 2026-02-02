@@ -36,12 +36,13 @@ PAIRWISE_FILES = [
     "rel_mouse_right.csv"
 ]
 
-OUTPUT_RESPONSE_FILE = "response.txt"
+OUTPUT_RESPONSE_FILE = "all_final.txt"
 OUTPUT_GREEN_BOX_FILE = "green_box.txt"
+OUTPUT_IDX_FILE = "max_index.txt"
 
 TASK_TABLE_FILE = Path("task_table.csv")
-START_DATE = pd.to_datetime("2025-11-25 14:24:56")
-
+START_DATE = pd.to_datetime("2024-11-30 14:24:56")
+END_DATE = pd.to_datetime("2025-11-30 14:24:56")
 # --------------------------------------------------------------------------- #
 # UTILITIES
 # --------------------------------------------------------------------------- #
@@ -52,6 +53,9 @@ def match_window(msg: str, window: str, raw_idx: int) -> bool:
     We use 15 characters before and after the index to allow for more context to handle edge cases where
     the window might not be exactly at the index due to text formatting or other issues.
     """
+    if not msg or not window:
+        return False
+
     # Clean both message and window of newlines and carriage returns
     msg_cleaned = msg.replace('\n', ' ').replace('\r', ' ')
     window_cleaned = window.replace('\n', ' ').replace('\r', ' ')
@@ -77,7 +81,11 @@ def make_leaf():
         "total_entries_left": 0,
         "total_entries_right": 0,
         "response_left": 0,
-        "response_right": 0
+        "response_right": 0,
+        "max_idx_left": -1,
+        "max_idx_right": -1,
+        "query_length_left": -1,
+        "query_length_right": -1
     }
 
 analysis_dict = defaultdict(
@@ -94,7 +102,7 @@ user_ids_within_time_range = []
 df_database = pd.read_csv(TASK_TABLE_FILE)
 df_database["user_id"] = df_database["user_id"].astype(str).str.strip()
 df_database["finished"] = pd.to_datetime(df_database["finished"], format="%Y-%m-%d %H:%M:%S")
-df_database = df_database[df_database["finished"].notna() & (df_database["finished"] > START_DATE)]
+df_database = df_database[df_database["finished"].notna() & (df_database["finished"].between(START_DATE, END_DATE))]
 
 user_ids_within_time_range.extend(df_database['user_id'].unique())
 
@@ -107,7 +115,7 @@ for src in BASE_DIR.rglob("rel_gaze*.csv"):
     # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
     try:
         _, user_id, task_id, _ = src.parts[-4:]
-        # if user_id != 'abc':
+        # if user_id != 'A3U042Q64BVD6G':
         #     continue
     except ValueError:
         continue
@@ -171,7 +179,12 @@ for src in BASE_DIR.rglob("rel_gaze*.csv"):
                 if match_window(text, window, idx_i):
                     if qid not in query_time_ranges:
                         query_time_ranges[qid] = rel_ts
+                        if resp_key == 'llm_response_2':
+                            analysis_dict[user_id][task_id][qid]["query_length_right"] = len(text)
+                        else:
+                            analysis_dict[user_id][task_id][qid]["query_length_left"] = len(text)
                     else:
+                        # query_id = 
                         query_time_ranges[qid] = min(query_time_ranges[qid], rel_ts)
                     break
 
@@ -227,15 +240,20 @@ for src in BASE_DIR.rglob("rel_gaze*.csv"):
         if query_id == BASE_QUERY_ID:
             continue
 
+
         #if right side
         if resp_key == 'llm_response_2':
             analysis_dict[user_id][task_id][query_id]["total_entries_right"] += 1
             if not is_not_looking:
                 analysis_dict[user_id][task_id][query_id]["response_right"] += 1
+            if analysis_dict[user_id][task_id][query_id]["max_idx_right"] < idx_i:
+                analysis_dict[user_id][task_id][query_id]["max_idx_right"] = idx_i
         else:
             analysis_dict[user_id][task_id][query_id]["total_entries_left"] += 1
             if not is_not_looking:
                 analysis_dict[user_id][task_id][query_id]["response_left"] += 1
+            if analysis_dict[user_id][task_id][query_id]["max_idx_left"] < idx_i:
+                analysis_dict[user_id][task_id][query_id]["max_idx_left"] = idx_i
 
         if camera_green:
             analysis_dict[user_id][task_id][query_id]["camera_green"] += 1
@@ -248,7 +266,7 @@ summary_task_dict = defaultdict(lambda: defaultdict(float))
 
 with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
     f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Queries\n")
+    f.write("# Average Across Queries (Response)\n")
     f.write("# ----------------------------------------------------------------------- #\n\n")
 
     for user_id, task_id_dict in analysis_dict.items():
@@ -278,7 +296,7 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
         # f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Tasks\n")
+    f.write("# Average Across Tasks (Response)\n")
     f.write("# ----------------------------------------------------------------------- #\n\n")
 
     for user_id, task_id_dict in summary_query_dict.items():
@@ -290,7 +308,7 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
         f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Users\n")
+    f.write("# Average Across Users (Response)\n")
     f.write("# ----------------------------------------------------------------------- #\n\n")
 
     for user_id, task_id_dict in summary_task_dict.items():
@@ -298,9 +316,12 @@ with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
         f.write(f'User ID {user_id}: {percentage}\n\n')
     f.write('\n')
 
-with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
+    summary_query_dict.clear()
+    summary_task_dict.clear()
+
+# with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
     f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Queries\n")
+    f.write("# Average Across Queries (Green Box)\n")
     f.write("# ----------------------------------------------------------------------- #\n\n")
 
     for user_id, task_id_dict in analysis_dict.items():
@@ -317,7 +338,7 @@ with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
         # f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Tasks\n")
+    f.write("# Average Across Tasks (Green Box)\n")
     f.write("# ----------------------------------------------------------------------- #\n\n")
 
     for user_id, task_id_dict in summary_query_dict.items():
@@ -329,10 +350,71 @@ with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
         f.write('\n')
 
     f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Users\n")
+    f.write("# Average Across Users (Green Box)\n")
     f.write("# ----------------------------------------------------------------------- #\n\n")
 
     for user_id, task_id_dict in summary_task_dict.items():
         percentage = sum(task_id_dict.values()) / len(task_id_dict)
         f.write(f'User ID {user_id}: {percentage}\n\n')
     f.write('\n')
+
+# with open(OUTPUT_IDX_FILE, mode="w") as f:
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Maximum Index For Each Query\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in analysis_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            f.write(f'\tTask_ID: {task_id}\n')
+            for query_id, data_dict in query_id_dict.items():
+                if data_dict["query_length_right"] > 0:
+                    left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
+                    f.write(f'\t\tQuery_ID (Left) {query_id}: {left_ratio}')
+                    f.write('\n')
+                    right_ratio = data_dict["max_idx_right"] / data_dict["query_length_right"] if data_dict["max_idx_right"] > 0 else 0
+                    f.write(f'\t\tQuery_ID (Right) {query_id}: {right_ratio}')
+                    f.write('\n')
+
+                    avg_ratio = (left_ratio + right_ratio) / 2
+                    f.write(f'\t\tQuery_ID (Avg) {query_id}: {avg_ratio}')
+                    summary_query_dict[user_id][task_id][query_id] = avg_ratio
+                else:
+                    left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
+                    f.write(f'\t\tQuery_ID {query_id}: {left_ratio}')
+
+                    summary_query_dict[user_id][task_id][query_id] = left_ratio
+                    
+                f.write('\n\n')
+
+            f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Tasks (Maximum Index)\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_query_dict.items():
+        f.write(f'User ID: {user_id}\n')
+        for task_id, query_id_dict in task_id_dict.items():
+            avg_task = sum(query_id_dict.values()) / len(query_id_dict)
+            summary_task_dict[user_id][task_id] = avg_task
+            f.write(f'\tTask_ID {task_id}: {avg_task}\n\n')
+        f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Average Across Users (Maximum Index)\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+
+    for user_id, task_id_dict in summary_task_dict.items():
+        avg_user = sum(task_id_dict.values()) / len(task_id_dict)
+        f.write(f'User ID {user_id}: {avg_user}\n\n')
+    f.write('\n')
+        # f.write('\n')
+
+    f.write("# ----------------------------------------------------------------------- #\n")
+    f.write("# Num Tasks Per User\n")
+    f.write("# ----------------------------------------------------------------------- #\n\n")
+    for user_id, task_id_dict in summary_task_dict.items():
+        f.write(f'User ID {user_id} completed: {len(task_id_dict)}\n\n')
+
+    
