@@ -228,3 +228,4 @@ response.txt
 
 #workspaces
 *.code-workspace
+/deprc
