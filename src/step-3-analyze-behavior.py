@@ -41,8 +41,12 @@ OUTPUT_GREEN_BOX_FILE = "green_box.txt"
 OUTPUT_IDX_FILE = "max_index.txt"
 
 TASK_TABLE_FILE = Path("task_table.csv")
-START_DATE = pd.to_datetime("2024-11-30 14:24:56")
-END_DATE = pd.to_datetime("2025-11-30 14:24:56")
+EDITED_TASK_TABLE_FILE = Path("edit_task_table.csv")
+START_DATE = pd.to_datetime("2024-01-19 00:00:01")
+END_DATE = pd.to_datetime("2027-11-30 14:24:56")
+
+OUTPUT_CSV = Path("all_metrics.csv")
+TO_OUTPUT_CSV = True #False gives txt file 
 # --------------------------------------------------------------------------- #
 # UTILITIES
 # --------------------------------------------------------------------------- #
@@ -103,6 +107,7 @@ df_database = pd.read_csv(TASK_TABLE_FILE)
 df_database["user_id"] = df_database["user_id"].astype(str).str.strip()
 df_database["finished"] = pd.to_datetime(df_database["finished"], format="%Y-%m-%d %H:%M:%S")
 df_database = df_database[df_database["finished"].notna() & (df_database["finished"].between(START_DATE, END_DATE))]
+df_database.to_csv(EDITED_TASK_TABLE_FILE, index=False)
 
 user_ids_within_time_range.extend(df_database['user_id'].unique())
 
@@ -264,157 +269,174 @@ summary_query_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(float))
 summary_task_dict = defaultdict(lambda: defaultdict(float))
 # summary_user_dict = defaultdict(float)
 
-with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Queries (Response)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
+if TO_OUTPUT_CSV:
+    rows = []
 
-    for user_id, task_id_dict in analysis_dict.items():
-        f.write(f'User ID: {user_id}\n')
-        for task_id, query_id_dict in task_id_dict.items():
-            f.write(f'\tTask_ID: {task_id}\n')
-            for query_id, data_dict in query_id_dict.items():
-                if data_dict['total_entries_right'] == 0:
-                    percentage = 0 if data_dict['total_entries_left'] == 0 else data_dict['response_left'] / data_dict["total_entries_left"]
-                    f.write(f'\t\tQuery_ID {query_id}: {percentage}\n')
-                    summary_query_dict[user_id][task_id][query_id] = percentage
-                else:
-                    left_percentage = 0 if data_dict['total_entries_left'] == 0 else data_dict['response_left'] / data_dict['total_entries_left']
-                    right_percentage = data_dict["response_right"] / data_dict['total_entries_right']
-                    overall_percentage = (data_dict["response_left"] + data_dict['response_right']) / (data_dict["total_entries_left"] + data_dict["total_entries_right"])
+    for k1, d1 in analysis_dict.items():
+        for k2, d2 in d1.items():
+            for k3, leaf in d2.items():
+                row = {
+                    "user_id": k1,
+                    "task_id": k2,
+                    "query_id": k3,
+                    **leaf
+                }
+                rows.append(row)
 
-                    f.write(f'\t\tQuery_ID (Left) {query_id}: {left_percentage}\n')
-                    f.write(f'\t\tQuery_ID (Right) {query_id}: {right_percentage}\n')
-                    f.write(f'\t\tQuery_ID (Overall) {query_id}: {overall_percentage}\n')
-                    f.write(f'\t\tQuery_ID (Sum) {query_id}: {left_percentage + right_percentage}\n')
+    analysis_df = pd.DataFrame(rows)
+    analysis_df.to_csv(OUTPUT_CSV, index=False)
+else:
+    with open(OUTPUT_RESPONSE_FILE, mode="w") as f:
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Queries (Response)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
 
-                    summary_query_dict[user_id][task_id][query_id] = overall_percentage
+        for user_id, task_id_dict in analysis_dict.items():
+            f.write(f'User ID: {user_id}\n')
+            for task_id, query_id_dict in task_id_dict.items():
+                f.write(f'\tTask_ID: {task_id}\n')
+                for query_id, data_dict in query_id_dict.items():
+                    if data_dict['total_entries_right'] == 0:
+                        percentage = 0 if data_dict['total_entries_left'] == 0 else data_dict['response_left'] / data_dict["total_entries_left"]
+                        f.write(f'\t\tQuery_ID {query_id}: {percentage}\n')
+                        summary_query_dict[user_id][task_id][query_id] = percentage
+                    else:
+                        left_percentage = 0 if data_dict['total_entries_left'] == 0 else data_dict['response_left'] / data_dict['total_entries_left']
+                        right_percentage = data_dict["response_right"] / data_dict['total_entries_right']
+                        overall_percentage = (data_dict["response_left"] + data_dict['response_right']) / (data_dict["total_entries_left"] + data_dict["total_entries_right"])
+
+                        f.write(f'\t\tQuery_ID (Left) {query_id}: {left_percentage}\n')
+                        f.write(f'\t\tQuery_ID (Right) {query_id}: {right_percentage}\n')
+                        f.write(f'\t\tQuery_ID (Overall) {query_id}: {overall_percentage}\n')
+                        f.write(f'\t\tQuery_ID (Sum) {query_id}: {left_percentage + right_percentage}\n')
+
+                        summary_query_dict[user_id][task_id][query_id] = overall_percentage
+
+                    f.write('\n')
+
+                f.write('\n')
+            # f.write('\n')
+
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Tasks (Response)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+
+        for user_id, task_id_dict in summary_query_dict.items():
+            f.write(f'User ID: {user_id}\n')
+            for task_id, query_id_dict in task_id_dict.items():
+                percentage = sum(query_id_dict.values()) / len(query_id_dict)
+                summary_task_dict[user_id][task_id] = percentage
+                f.write(f'\tTask_ID {task_id}: {percentage}\n\n')
+            f.write('\n')
+
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Users (Response)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+
+        for user_id, task_id_dict in summary_task_dict.items():
+            percentage = sum(task_id_dict.values()) / len(task_id_dict)
+            f.write(f'User ID {user_id}: {percentage}\n\n')
+        f.write('\n')
+
+        summary_query_dict.clear()
+        summary_task_dict.clear()
+
+    # with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Queries (Green Box)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+
+        for user_id, task_id_dict in analysis_dict.items():
+            f.write(f'User ID: {user_id}\n')
+            for task_id, query_id_dict in task_id_dict.items():
+                f.write(f'\tTask_ID: {task_id}\n')
+                for query_id, data_dict in query_id_dict.items():
+                    if data_dict['total_entries_left'] + data_dict['total_entries_right'] > 0:
+                        percentage = data_dict['camera_green'] / (data_dict["total_entries_left"] + data_dict['total_entries_right'])
+                        f.write(f'\t\tQuery_ID {query_id}: {percentage}\n')
+                        summary_query_dict[user_id][task_id][query_id] = percentage
+                    f.write('\n')
+                f.write('\n')
+            # f.write('\n')
+
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Tasks (Green Box)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+
+        for user_id, task_id_dict in summary_query_dict.items():
+            f.write(f'User ID: {user_id}\n')
+            for task_id, query_id_dict in task_id_dict.items():
+                percentage = sum(query_id_dict.values()) / len(query_id_dict)
+                summary_task_dict[user_id][task_id] = percentage
+                f.write(f'\tTask_ID {task_id}: {percentage}\n\n')
+            f.write('\n')
+
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Users (Green Box)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+
+        for user_id, task_id_dict in summary_task_dict.items():
+            percentage = sum(task_id_dict.values()) / len(task_id_dict)
+            f.write(f'User ID {user_id}: {percentage}\n\n')
+        f.write('\n')
+
+    # with open(OUTPUT_IDX_FILE, mode="w") as f:
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Maximum Index For Each Query\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+
+        for user_id, task_id_dict in analysis_dict.items():
+            f.write(f'User ID: {user_id}\n')
+            for task_id, query_id_dict in task_id_dict.items():
+                f.write(f'\tTask_ID: {task_id}\n')
+                for query_id, data_dict in query_id_dict.items():
+                    if data_dict["query_length_right"] > 0:
+                        left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
+                        f.write(f'\t\tQuery_ID (Left) {query_id}: {left_ratio}')
+                        f.write('\n')
+                        right_ratio = data_dict["max_idx_right"] / data_dict["query_length_right"] if data_dict["max_idx_right"] > 0 else 0
+                        f.write(f'\t\tQuery_ID (Right) {query_id}: {right_ratio}')
+                        f.write('\n')
+
+                        avg_ratio = (left_ratio + right_ratio) / 2
+                        f.write(f'\t\tQuery_ID (Avg) {query_id}: {avg_ratio}')
+                        summary_query_dict[user_id][task_id][query_id] = avg_ratio
+                    else:
+                        left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
+                        f.write(f'\t\tQuery_ID {query_id}: {left_ratio}')
+
+                        summary_query_dict[user_id][task_id][query_id] = left_ratio
+                        
+                    f.write('\n\n')
 
                 f.write('\n')
 
-            f.write('\n')
-        # f.write('\n')
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Tasks (Maximum Index)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
 
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Tasks (Response)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-
-    for user_id, task_id_dict in summary_query_dict.items():
-        f.write(f'User ID: {user_id}\n')
-        for task_id, query_id_dict in task_id_dict.items():
-            percentage = sum(query_id_dict.values()) / len(query_id_dict)
-            summary_task_dict[user_id][task_id] = percentage
-            f.write(f'\tTask_ID {task_id}: {percentage}\n\n')
-        f.write('\n')
-
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Users (Response)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-
-    for user_id, task_id_dict in summary_task_dict.items():
-        percentage = sum(task_id_dict.values()) / len(task_id_dict)
-        f.write(f'User ID {user_id}: {percentage}\n\n')
-    f.write('\n')
-
-    summary_query_dict.clear()
-    summary_task_dict.clear()
-
-# with open(OUTPUT_GREEN_BOX_FILE, mode="w") as f:
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Queries (Green Box)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-
-    for user_id, task_id_dict in analysis_dict.items():
-        f.write(f'User ID: {user_id}\n')
-        for task_id, query_id_dict in task_id_dict.items():
-            f.write(f'\tTask_ID: {task_id}\n')
-            for query_id, data_dict in query_id_dict.items():
-                if data_dict['total_entries_left'] + data_dict['total_entries_right'] > 0:
-                    percentage = data_dict['camera_green'] / (data_dict["total_entries_left"] + data_dict['total_entries_right'])
-                    f.write(f'\t\tQuery_ID {query_id}: {percentage}\n')
-                    summary_query_dict[user_id][task_id][query_id] = percentage
-                f.write('\n')
-            f.write('\n')
-        # f.write('\n')
-
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Tasks (Green Box)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-
-    for user_id, task_id_dict in summary_query_dict.items():
-        f.write(f'User ID: {user_id}\n')
-        for task_id, query_id_dict in task_id_dict.items():
-            percentage = sum(query_id_dict.values()) / len(query_id_dict)
-            summary_task_dict[user_id][task_id] = percentage
-            f.write(f'\tTask_ID {task_id}: {percentage}\n\n')
-        f.write('\n')
-
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Users (Green Box)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-
-    for user_id, task_id_dict in summary_task_dict.items():
-        percentage = sum(task_id_dict.values()) / len(task_id_dict)
-        f.write(f'User ID {user_id}: {percentage}\n\n')
-    f.write('\n')
-
-# with open(OUTPUT_IDX_FILE, mode="w") as f:
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Maximum Index For Each Query\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-
-    for user_id, task_id_dict in analysis_dict.items():
-        f.write(f'User ID: {user_id}\n')
-        for task_id, query_id_dict in task_id_dict.items():
-            f.write(f'\tTask_ID: {task_id}\n')
-            for query_id, data_dict in query_id_dict.items():
-                if data_dict["query_length_right"] > 0:
-                    left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
-                    f.write(f'\t\tQuery_ID (Left) {query_id}: {left_ratio}')
-                    f.write('\n')
-                    right_ratio = data_dict["max_idx_right"] / data_dict["query_length_right"] if data_dict["max_idx_right"] > 0 else 0
-                    f.write(f'\t\tQuery_ID (Right) {query_id}: {right_ratio}')
-                    f.write('\n')
-
-                    avg_ratio = (left_ratio + right_ratio) / 2
-                    f.write(f'\t\tQuery_ID (Avg) {query_id}: {avg_ratio}')
-                    summary_query_dict[user_id][task_id][query_id] = avg_ratio
-                else:
-                    left_ratio = data_dict["max_idx_left"] / data_dict["query_length_left"] if data_dict["max_idx_left"] > 0 else 0
-                    f.write(f'\t\tQuery_ID {query_id}: {left_ratio}')
-
-                    summary_query_dict[user_id][task_id][query_id] = left_ratio
-                    
-                f.write('\n\n')
-
+        for user_id, task_id_dict in summary_query_dict.items():
+            f.write(f'User ID: {user_id}\n')
+            for task_id, query_id_dict in task_id_dict.items():
+                avg_task = sum(query_id_dict.values()) / len(query_id_dict)
+                summary_task_dict[user_id][task_id] = avg_task
+                f.write(f'\tTask_ID {task_id}: {avg_task}\n\n')
             f.write('\n')
 
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Tasks (Maximum Index)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Average Across Users (Maximum Index)\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
 
-    for user_id, task_id_dict in summary_query_dict.items():
-        f.write(f'User ID: {user_id}\n')
-        for task_id, query_id_dict in task_id_dict.items():
-            avg_task = sum(query_id_dict.values()) / len(query_id_dict)
-            summary_task_dict[user_id][task_id] = avg_task
-            f.write(f'\tTask_ID {task_id}: {avg_task}\n\n')
+        for user_id, task_id_dict in summary_task_dict.items():
+            avg_user = sum(task_id_dict.values()) / len(task_id_dict)
+            f.write(f'User ID {user_id}: {avg_user}\n\n')
         f.write('\n')
+            # f.write('\n')
 
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Average Across Users (Maximum Index)\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
+        f.write("# ----------------------------------------------------------------------- #\n")
+        f.write("# Num Tasks Per User\n")
+        f.write("# ----------------------------------------------------------------------- #\n\n")
+        for user_id, task_id_dict in summary_task_dict.items():
+            f.write(f'User ID {user_id} completed: {len(task_id_dict)}\n\n')
 
-    for user_id, task_id_dict in summary_task_dict.items():
-        avg_user = sum(task_id_dict.values()) / len(task_id_dict)
-        f.write(f'User ID {user_id}: {avg_user}\n\n')
-    f.write('\n')
-        # f.write('\n')
-
-    f.write("# ----------------------------------------------------------------------- #\n")
-    f.write("# Num Tasks Per User\n")
-    f.write("# ----------------------------------------------------------------------- #\n\n")
-    for user_id, task_id_dict in summary_task_dict.items():
-        f.write(f'User ID {user_id} completed: {len(task_id_dict)}\n\n')
-
-    
+        
