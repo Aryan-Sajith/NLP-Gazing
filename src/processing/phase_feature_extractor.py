@@ -268,7 +268,7 @@ class PhaseFeatureExtractor:
         
         if len(reviewing_looking) > 1:
             # Calculate engaged time using windowing (sum of active intervals)
-            timestamps = reviewing_looking['rel_ts'].values
+            timestamps = reviewing_looking['rel_ts'].sort_values().values
             intervals = [(timestamps[i+1] - timestamps[i]) for i in range(len(timestamps) - 1)]
             engaged_time_ms = sum(min(interval, INACTIVITY_THRESHOLD_MS) for interval in intervals)
             engaged_time_s = engaged_time_ms / 1000
@@ -295,7 +295,7 @@ class PhaseFeatureExtractor:
         composing_looking_at_text = composing_data[composing_data['is_experimental_text']].copy() if len(composing_data) > 0 else pd.DataFrame()
         
         if len(composing_looking_at_text) > 1:
-            timestamps = composing_looking_at_text['rel_ts'].values
+            timestamps = composing_looking_at_text['rel_ts'].sort_values().values
             intervals = [(timestamps[i+1] - timestamps[i]) for i in range(len(timestamps) - 1)]
             lookback_time_ms = sum(min(interval, INACTIVITY_THRESHOLD_MS) for interval in intervals)
             lookback_time_s = lookback_time_ms / 1000

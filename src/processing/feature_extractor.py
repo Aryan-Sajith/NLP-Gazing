@@ -330,7 +330,7 @@ class FeatureExtractor:
         if len(looking_data) <= 1:
             return 0.0
         
-        timestamps = [d.rel_ts for d in looking_data]
+        timestamps = sorted([d.rel_ts for d in looking_data])
         intervals = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps) - 1)]
         
         active_time = sum(min(interval, INACTIVITY_THRESHOLD_MS) for interval in intervals)
