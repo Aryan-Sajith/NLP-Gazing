@@ -282,6 +282,7 @@ class PhaseFeatureExtractor:
         features[f"{prefix}_reviewing_engaged_pct"] = (engaged_time_s / total_duration_s * 100) if total_duration_s > 0 else 0
         features[f"{prefix}_reviewing_active_ratio"] = (engaged_time_s / reviewing_duration_s) if reviewing_duration_s > 0 else 0
         features[f"{prefix}_reviewing_offscreen_ratio"] = reviewing_data['is_not_looking'].mean() if len(reviewing_data) > 0 else 0
+        features[f"{prefix}_reviewing_onscreen_ratio"] = (~reviewing_data['is_not_looking']).mean() if len(reviewing_data) > 0 else 0
         
         # Max character position reached on this side
         if len(reviewing_looking) > 0:

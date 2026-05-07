@@ -45,5 +45,6 @@ QUALITY_STANDARDS = {
 }
 
 # Feature extraction parameters
-INACTIVITY_THRESHOLD_MS = 2000.0  # Milliseconds
-NUM_TIME_WINDOWS = 100  # For temporal windowing features
+#INACTIVITY_THRESHOLD_MS = 2000.0  # Milliseconds
+INACTIVITY_THRESHOLD_MS = 1000.0  # Milliseconds
+NUM_TIME_WINDOWS = 20  # For temporal windowing features
