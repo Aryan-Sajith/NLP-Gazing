@@ -280,6 +280,7 @@ class FeatureExtractor:
         if not data_points or response_length == 0:
             return ResponseFeatures(
                 focused_engagement_ratio=0.0,
+                focused_engagement_time=0.0,
                 overall_attention_ratio=0.0,
                 normalized_avg_char_position=0.0,
                 reading_completion_ratio=0.0,
@@ -288,15 +289,15 @@ class FeatureExtractor:
                 response_length=response_length,
                 data_points=0
             )
-        
+
         # Sort by timestamp
         data_points = sorted(data_points, key=lambda x: x.rel_ts)
-        
+
         # Separate looking vs not-looking
         looking_data = [d for d in data_points if d.is_looking_at_text()]
-        
+
         # Calculate engagement metrics
-        focused_engagement = self._calculate_focused_engagement(looking_data)
+        focused_engagement_ratio, focused_engagement_time = self._calculate_focused_engagement(looking_data)
         overall_attention = len(looking_data) / len(data_points) if data_points else 0.0
         
         # Calculate reading metrics from looking data
@@ -315,7 +316,8 @@ class FeatureExtractor:
             windowed = [0.0] * NUM_TIME_WINDOWS
         
         return ResponseFeatures(
-            focused_engagement_ratio=focused_engagement,
+            focused_engagement_ratio=focused_engagement_ratio,
+            focused_engagement_time=focused_engagement_time,
             overall_attention_ratio=overall_attention,
             normalized_avg_char_position=avg_position,
             reading_completion_ratio=completion,
@@ -325,18 +327,19 @@ class FeatureExtractor:
             data_points=len(data_points)
         )
     
-    def _calculate_focused_engagement(self, looking_data: List) -> float:
-        """Calculate focused engagement ratio (continuous reading when looking)"""
+    def _calculate_focused_engagement(self, looking_data: List) -> Tuple[float, float]:
+        """Calculate focused engagement ratio and active time (ms)"""
         if len(looking_data) <= 1:
-            return 0.0
-        
+            return 0.0, 0.0
+
         timestamps = sorted([d.rel_ts for d in looking_data])
         intervals = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps) - 1)]
-        
+
         active_time = sum(min(interval, INACTIVITY_THRESHOLD_MS) for interval in intervals)
         session_time = max(timestamps) - min(timestamps)
-        
-        return active_time / session_time if session_time > 0 else 0.0
+
+        ratio = active_time / session_time if session_time > 0 else 0.0
+        return ratio, active_time
     
     def _calculate_windowed_features(self, data_points: List, 
                                     response_length: int) -> List[float]:

@@ -1,0 +1,177 @@
+================================================================================
+WORKER QUALITY REPORT
+================================================================================
+
+Quality Standards: Min 2000 rows, 500 text rows, 2.5min, 10.0% text
+
+Total users: 82 | Low quality: 26 | Good quality: 56
+
+================================================================================
+ALL WORKERS
+================================================================================
+
+A18LFH7XW61JO9 (73 tasks) | Rows: 2765 | Text: 899 (32.2%) | Duration: 3.6min
+A1Q7VWUBIJOK17 (51 tasks) | Rows: 4997 | Text: 2011 (40.9%) | Duration: 6.8min
+AR8XP4934J852 (44 tasks) | Rows: 4380 | Text: 1487 (34.3%) | Duration: 3.9min
+A1IZ4NX41 (30 tasks) | Rows: 1732 | Text: 452 (27.6%) | Duration: 5.1min
+A13XXMDHOULEZ7 (23 tasks) | Rows: 12675 | Text: 5967 (48.5%) | Duration: 15.4min
+A1IZ4NX41GK (22 tasks) | Rows: 1117 | Text: 284 (24.7%) | Duration: 6.1min
+A3GI8MQXQB8QBS (14 tasks) | Rows: 1503 | Text: 236 (16.4%) | Duration: 2.4min
+abc (13 tasks) | Rows: 3234 | Text: 1089 (23.3%) | Duration: 1.3min
+A3PYB8Z6FFWSOV (12 tasks) | Rows: 708 | Text: 263 (36.8%) | Duration: 4.0min
+AM0JKZVOEOTMA (12 tasks) | Rows: 4839 | Text: 1556 (32.4%) | Duration: 7.0min
+A1IZ4NX41GKU4X (9 tasks) | Rows: 732 | Text: 196 (27.7%) | Duration: 5.2min
+AVOF14300525D (8 tasks) | Rows: 8181 | Text: 3707 (46.4%) | Duration: 10.5min
+APEJX2DGX4TYC (7 tasks) | Rows: 2989 | Text: 693 (22.3%) | Duration: 4.2min
+A6KOTWP7N7RLU (7 tasks) | Rows: 6118 | Text: 1786 (29.2%) | Duration: 10.1min
+A36H75IU3Q97QS (6 tasks) | Rows: 4679 | Text: 1033 (22.3%) | Duration: 4.8min
+ANN1IF9SWOGJ7 (6 tasks) | Rows: 1749 | Text: 350 (22.1%) | Duration: 3.1min
+none (6 tasks) | Rows: 2647 | Text: 844 (30.3%) | Duration: 7.8min
+AI2DTO8YE8QCQ (6 tasks) | Rows: 3986 | Text: 1281 (23.5%) | Duration: 6.1min
+A199JJH4CKRRXS (5 tasks) | Rows: 2311 | Text: 610 (26.4%) | Duration: 3.6min
+A3VCTHO95DZWAQ (5 tasks) | Rows: 2780 | Text: 346 (12.4%) | Duration: 3.3min
+AJZHPDCKUVRM8 (5 tasks) | Rows: 2923 | Text: 695 (23.8%) | Duration: 4.3min
+A28VJXOUN6ISSA (5 tasks) | Rows: 2666 | Text: 393 (15.6%) | Duration: 3.5min
+AZMQZIFTRV6ZF (4 tasks) | Rows: 2671 | Text: 409 (14.5%) | Duration: 3.3min
+ARTQWWNFA7IOD (4 tasks) | Rows: 8557 | Text: 2294 (26.8%) | Duration: 8.1min
+AHV4U78TUUDKI (4 tasks) | Rows: 4113 | Text: 1094 (28.2%) | Duration: 5.5min
+A2U7UDW9Y1WGWF (4 tasks) | Rows: 5504 | Text: 1057 (17.5%) | Duration: 5.5min
+A2VBD0D63OY36V (4 tasks) | Rows: 2251 | Text: 394 (16.6%) | Duration: 3.9min
+A2KJ983WWTEK4L (4 tasks) | Rows: 9454 | Text: 2742 (30.8%) | Duration: 10.5min
+AMG9Y1YLBTKIV (4 tasks) | Rows: 3403 | Text: 1033 (30.4%) | Duration: 4.6min
+A1HAQGD26UMBU0 (4 tasks) | Rows: 2313 | Text: 603 (24.0%) | Duration: 3.7min
+A2K0L9M1ZZO5C9 (3 tasks) | Rows: 8655 | Text: 2233 (25.6%) | Duration: 8.2min
+A1S88VQY8G8CNC (3 tasks) | Rows: 3013 | Text: 835 (27.9%) | Duration: 5.8min
+A1WF1X8PQQJ2OQ (3 tasks) | Rows: 3279 | Text: 264 (8.0%) | Duration: 4.6min
+AE4M5Y5MIGY1B (3 tasks) | Rows: 2521 | Text: 256 (10.1%) | Duration: 3.2min
+AAHQAOHHLCBQE (3 tasks) | Rows: 2216 | Text: 604 (25.8%) | Duration: 3.5min
+A22KRF782ELLB0 (3 tasks) | Rows: 2575 | Text: 852 (31.7%) | Duration: 5.6min
+A1CMJNN1QQKLU8 (3 tasks) | Rows: 1955 | Text: 149 (8.6%) | Duration: 2.8min
+A2M3DR0V45HNUL (3 tasks) | Rows: 3156 | Text: 1026 (32.6%) | Duration: 4.2min
+A1SMWIBTQ2AESU (3 tasks) | Rows: 2827 | Text: 283 (9.9%) | Duration: 3.3min
+A1E6RS45GUAFC3 (2 tasks) | Rows: 12571 | Text: 3889 (30.9%) | Duration: 27.4min
+mehultest (2 tasks) | Rows: 19243 | Text: 6054 (31.1%) | Duration: 6.9min
+ASPKEM1LCF5BP (2 tasks) | Rows: 3893 | Text: 994 (26.1%) | Duration: 5.4min
+AVWU9JDY5G81E (2 tasks) | Rows: 2122 | Text: 744 (30.7%) | Duration: 5.6min
+A34ZJFQ9UCP1CR (2 tasks) | Rows: 2767 | Text: 609 (23.9%) | Duration: 4.0min
+A34O453D7VWWUK (2 tasks) | Rows: 4064 | Text: 714 (18.6%) | Duration: 4.9min
+A2TG71MJ93AECP (2 tasks) | Rows: 4821 | Text: 879 (17.8%) | Duration: 4.9min
+A1IZ4NX41G (2 tasks) | Rows: 1473 | Text: 354 (23.6%) | Duration: 4.7min
+A2R2YZTSME1K3F (2 tasks) | Rows: 7674 | Text: 3266 (44.1%) | Duration: 15.8min
+A1AYL5V5GI9HC1 (2 tasks) | Rows: 5442 | Text: 1210 (22.1%) | Duration: 7.5min
+A2WB0HKE3RFYIS (2 tasks) | Rows: 8423 | Text: 4290 (53.2%) | Duration: 9.9min
+A3UPEZR0XSE052 (2 tasks) | Rows: 2915 | Text: 424 (14.7%) | Duration: 3.3min
+A3I8V1SR4ZGLCI (1 tasks) | Rows: 1226 | Text: 398 (32.4%) | Duration: 3.3min
+A8P9R18M6OX0Q (1 tasks) | Rows: 1296 | Text: 404 (31.2%) | Duration: 3.3min
+A27WZ1GYA5H2JZ (1 tasks) | Rows: 4996 | Text: 574 (11.5%) | Duration: 4.0min
+A24UWUL93BCA60 (1 tasks) | Rows: 4214 | Text: 1274 (30.2%) | Duration: 5.6min
+A1IZ4NX41GKU (1 tasks) | Rows: 500 | Text: 154 (30.9%) | Duration: 3.0min
+A3IDRTM133H0VQ (1 tasks) | Rows: 2740 | Text: 904 (33.0%) | Duration: 6.2min
+A14W0AXTJ3R19V (1 tasks) | Rows: 3020 | Text: 1269 (42.0%) | Duration: 5.6min
+A2IXADH4RS1WEZ (1 tasks) | Rows: 1740 | Text: 190 (10.9%) | Duration: 4.1min
+A3TSCAPK7VI9L (1 tasks) | Rows: 2908 | Text: 540 (18.6%) | Duration: 4.4min
+A106LKOIXL2ZSR (1 tasks) | Rows: 2215 | Text: 475 (21.4%) | Duration: 3.5min
+A2FK6782M09EBO (1 tasks) | Rows: 2870 | Text: 489 (17.0%) | Duration: 3.6min
+AAWX7QFQUNM6D (1 tasks) | Rows: 10016 | Text: 6426 (64.2%) | Duration: 11.7min
+ACSS93E03ZUGX (1 tasks) | Rows: 4346 | Text: 1305 (30.0%) | Duration: 3.9min
+AAGUHBMCOYB8J (1 tasks) | Rows: 5890 | Text: 770 (13.1%) | Duration: 4.0min
+A3LDO79YUW4MMW (1 tasks) | Rows: 1081 | Text: 176 (16.3%) | Duration: 3.0min
+A1YHKXT8CISE1Q (1 tasks) | Rows: 5732 | Text: 852 (14.9%) | Duration: 4.5min
+A3EFKBV6W73WTX (1 tasks) | Rows: 2208 | Text: 588 (26.6%) | Duration: 3.8min
+A2D07SVRO4UFVL (1 tasks) | Rows: 4736 | Text: 808 (17.1%) | Duration: 7.3min
+ANLXKHVWIYJJ (1 tasks) | Rows: 5393 | Text: 2534 (47.0%) | Duration: 6.8min
+A2OENJVA78PHTL (1 tasks) | Rows: 2300 | Text: 543 (23.6%) | Duration: 3.6min
+A1HQGU5SA9UORE (1 tasks) | Rows: 6831 | Text: 2079 (30.4%) | Duration: 8.9min
+A3A8P4UR9A0DWQ (1 tasks) | Rows: 4962 | Text: 1158 (23.3%) | Duration: 4.0min
+A3UWNTYN8750BT (1 tasks) | Rows: 2214 | Text: 688 (31.1%) | Duration: 3.9min
+ACCXC5V05C9R9 (1 tasks) | Rows: 5620 | Text: 2656 (47.3%) | Duration: 4.6min
+A1SUMUAP2HD6I1 (1 tasks) | Rows: 5035 | Text: 239 (4.7%) | Duration: 4.2min
+ARSYPIB62OGI8 (1 tasks) | Rows: 2862 | Text: 766 (26.7%) | Duration: 3.9min
+A3U042Q64BVD6G (1 tasks) | Rows: 5938 | Text: 1894 (31.9%) | Duration: 4.9min
+AYZHFJOTFLWRE (1 tasks) | Rows: 1082 | Text: 175 (16.2%) | Duration: 3.3min
+A1DLZK8TZJ7ESF (1 tasks) | Rows: 5806 | Text: 738 (12.7%) | Duration: 4.0min
+A9G5PXNUA5V8O (1 tasks) | Rows: 3010 | Text: 823 (27.3%) | Duration: 4.4min
+AXRWAXX9EXR0Y (1 tasks) | Rows: 2316 | Text: 519 (22.4%) | Duration: 3.8min
+
+================================================================================
+LOW QUALITY WORKERS (WITH ISSUES)
+================================================================================
+
+A3GI8MQXQB8QBS (14 tasks) | Rows: 1503 | Text: 236 (16.4%) | Duration: 2.4min
+  Issues: total=1503, text=236, duration=2.4min
+
+A1CMJNN1QQKLU8 (3 tasks) | Rows: 1955 | Text: 149 (8.6%) | Duration: 2.8min
+  Issues: total=1955, text=149, text%=8.6%
+
+A3I8V1SR4ZGLCI (1 tasks) | Rows: 1226 | Text: 398 (32.4%) | Duration: 3.3min
+  Issues: total=1226, text=398
+
+A8P9R18M6OX0Q (1 tasks) | Rows: 1296 | Text: 404 (31.2%) | Duration: 3.3min
+  Issues: total=1296, text=404
+
+A1IZ4NX41GK (22 tasks) | Rows: 1117 | Text: 284 (24.7%) | Duration: 6.1min
+  Issues: total=1117, text=284
+
+A2IXADH4RS1WEZ (1 tasks) | Rows: 1740 | Text: 190 (10.9%) | Duration: 4.1min
+  Issues: total=1740, text=190
+
+A1WF1X8PQQJ2OQ (3 tasks) | Rows: 3279 | Text: 264 (8.0%) | Duration: 4.6min
+  Issues: text=264, text%=8.0%
+
+A3LDO79YUW4MMW (1 tasks) | Rows: 1081 | Text: 176 (16.3%) | Duration: 3.0min
+  Issues: total=1081, text=176
+
+A1IZ4NX41G (2 tasks) | Rows: 1473 | Text: 354 (23.6%) | Duration: 4.7min
+  Issues: total=1473, text=354
+
+A1IZ4NX41 (30 tasks) | Rows: 1732 | Text: 452 (27.6%) | Duration: 5.1min
+  Issues: total=1732, text=452
+
+A1SUMUAP2HD6I1 (1 tasks) | Rows: 5035 | Text: 239 (4.7%) | Duration: 4.2min
+  Issues: text=239, text%=4.7%
+
+ANN1IF9SWOGJ7 (6 tasks) | Rows: 1749 | Text: 350 (22.1%) | Duration: 3.1min
+  Issues: total=1749, text=350
+
+AYZHFJOTFLWRE (1 tasks) | Rows: 1082 | Text: 175 (16.2%) | Duration: 3.3min
+  Issues: total=1082, text=175
+
+A1SMWIBTQ2AESU (3 tasks) | Rows: 2827 | Text: 283 (9.9%) | Duration: 3.3min
+  Issues: text=283, text%=9.9%
+
+A1IZ4NX41GKU4X (9 tasks) | Rows: 732 | Text: 196 (27.7%) | Duration: 5.2min
+  Issues: total=732, text=196
+
+A1IZ4NX41GKU (1 tasks) | Rows: 500 | Text: 154 (30.9%) | Duration: 3.0min
+  Issues: total=500, text=154
+
+A3PYB8Z6FFWSOV (12 tasks) | Rows: 708 | Text: 263 (36.8%) | Duration: 4.0min
+  Issues: total=708, text=263
+
+abc (13 tasks) | Rows: 3234 | Text: 1089 (23.3%) | Duration: 1.3min
+  Issues: duration=1.3min
+
+AZMQZIFTRV6ZF (4 tasks) | Rows: 2671 | Text: 409 (14.5%) | Duration: 3.3min
+  Issues: text=409
+
+A106LKOIXL2ZSR (1 tasks) | Rows: 2215 | Text: 475 (21.4%) | Duration: 3.5min
+  Issues: text=475
+
+A2FK6782M09EBO (1 tasks) | Rows: 2870 | Text: 489 (17.0%) | Duration: 3.6min
+  Issues: text=489
+
+A3VCTHO95DZWAQ (5 tasks) | Rows: 2780 | Text: 346 (12.4%) | Duration: 3.3min
+  Issues: text=346
+
+AE4M5Y5MIGY1B (3 tasks) | Rows: 2521 | Text: 256 (10.1%) | Duration: 3.2min
+  Issues: text=256
+
+A2VBD0D63OY36V (4 tasks) | Rows: 2251 | Text: 394 (16.6%) | Duration: 3.9min
+  Issues: text=394
+
+A3UPEZR0XSE052 (2 tasks) | Rows: 2915 | Text: 424 (14.7%) | Duration: 3.3min
+  Issues: text=424
+
+A28VJXOUN6ISSA (5 tasks) | Rows: 2666 | Text: 393 (15.6%) | Duration: 3.5min
+  Issues: text=393
+

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from typing import List, Optional
-
+from ..config.constants import NUM_TIME_WINDOWS
 
 @dataclass
 class ResponseFeatures:
@@ -10,6 +10,7 @@ class ResponseFeatures:
     
     # Engagement metrics
     focused_engagement_ratio: float
+    focused_engagement_time: float
     overall_attention_ratio: float
     
     # Reading pattern metrics
@@ -75,6 +76,7 @@ class ComparisonFeatures:
         }
         
         # Add Response A features
+        result['user_query_length'] = len(self.user_query)
         self._add_modality_features(result, 'response_A', self.response_a)
         
         # Add Response B features (or None for pointwise)
@@ -110,6 +112,7 @@ class ComparisonFeatures:
         """Add features from both gaze and mouse to result dict"""
         for mod_name, mod_features in [('gaze', modality.gaze), ('mouse', modality.mouse)]:
             result[f'{prefix}_{mod_name}_focused_engagement_ratio'] = mod_features.focused_engagement_ratio
+            result[f'{prefix}_{mod_name}_focused_engagement_time'] = mod_features.focused_engagement_time
             result[f'{prefix}_{mod_name}_overall_attention_ratio'] = mod_features.overall_attention_ratio
             result[f'{prefix}_{mod_name}_normalized_avg_char_position'] = mod_features.normalized_avg_char_position
             result[f'{prefix}_{mod_name}_reading_completion_ratio'] = mod_features.reading_completion_ratio
@@ -127,13 +130,14 @@ class ComparisonFeatures:
         """Add None placeholders for missing response"""
         for mod_name in ['gaze', 'mouse']:
             result[f'{prefix}_{mod_name}_focused_engagement_ratio'] = None
+            result[f'{prefix}_{mod_name}_focused_engagement_time'] = None
             result[f'{prefix}_{mod_name}_overall_attention_ratio'] = None
             result[f'{prefix}_{mod_name}_normalized_avg_char_position'] = None
             result[f'{prefix}_{mod_name}_reading_completion_ratio'] = None
             result[f'{prefix}_{mod_name}_normalized_char_position_variance'] = None
             result[f'{prefix}_{mod_name}_data_points'] = None
             
-            for i in range(100):
+            for i in range(NUM_TIME_WINDOWS):
                 result[f'{prefix}_{mod_name}_window_{i:03d}'] = None
         
         result[f'{prefix}_response_length'] = None

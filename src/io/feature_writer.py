@@ -2,8 +2,8 @@
 
 import csv
 from pathlib import Path
-from typing import List
-
+from typing import List, Optional
+from ..config.constants import NUM_TIME_WINDOWS
 
 class FeatureWriter:
     """Writes extracted features to CSV"""
@@ -11,24 +11,27 @@ class FeatureWriter:
     def __init__(self, output_path: Path):
         self.output_path = output_path
     
-    def write_features(self, features: List[dict], headers: List[str]):
+    def write_features(self, features: List[dict], headers: Optional[List[str]] = None):
         """
         Write feature vectors to CSV.
-        
+
         Args:
             features: List of feature dictionaries
-            headers: Column headers
+            headers: Ignored; column names are derived from the feature dicts
         """
         try:
             self.output_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
+            # Derive column names from the actual keys present in the feature dicts
+            fieldnames = list(dict.fromkeys(k for f in features for k in f))
+
             with open(self.output_path, 'w', newline='', encoding='utf-8') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=headers)
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
                 writer.writeheader()
-                
+
                 for feature_dict in features:
                     writer.writerow(feature_dict)
-            
+
             print(f"Features written to {self.output_path}")
             
         except Exception as e:
@@ -55,6 +58,7 @@ class FeatureWriter:
                 prefix = f'response_{response}_{modality}'
                 headers.extend([
                     f'{prefix}_focused_engagement_ratio',
+                    f'{prefix}_focused_engagement_time',
                     f'{prefix}_overall_attention_ratio',
                     f'{prefix}_normalized_avg_char_position',
                     f'{prefix}_reading_completion_ratio',
@@ -68,7 +72,7 @@ class FeatureWriter:
         # Windowed features
         for response in ['A', 'B']:
             for modality in ['gaze', 'mouse']:
-                for i in range(100):
+                for i in range(NUM_TIME_WINDOWS):
                     headers.append(f'response_{response}_{modality}_window_{i:03d}')
         
         # Pointwise phase features (for each modality)
@@ -112,6 +116,7 @@ class FeatureWriter:
                     f'{prefix}reviewing_engaged_pct',
                     f'{prefix}reviewing_active_ratio',
                     f'{prefix}reviewing_offscreen_ratio',
+                    f'{prefix}reviewing_onscreen_ratio',
                     f'{prefix}max_char_position_reached',
                     f'{prefix}composing_lookback_time_s',
                     f'{prefix}composing_lookback_ratio',
