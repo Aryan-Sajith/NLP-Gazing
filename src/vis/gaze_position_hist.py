@@ -1,0 +1,204 @@
+"""
+Compute per-(user, task, query, source) normalized gaze/mouse-position histograms.
+
+For each valid sample (centre_idx >= 0 and assigned query_id >= 0) the
+relative position within the response is centre_idx / response_length.  A
+100-bin histogram over [0, 1] is built for every (user_id, task_id, query_id,
+source) group and normalized to a probability distribution.  Average
+distributions are plotted (one 2x2 figure for gaze, one for mouse) and the
+full table is saved to output/user_gazing_hist.csv.
+"""
+
+import os
+import glob
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+USER_BEHAVIOR_DIR = os.path.join(PROJECT_ROOT, "user_behavior")
+QUERY_LOGS_PATH = os.path.join(PROJECT_ROOT, "query_logs_table.csv")
+GAZE_OUTPUT_PATH  = os.path.join(PROJECT_ROOT, "output", "user_gazing_hist.csv")
+MOUSE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "output", "user_mouse_hist.csv")
+GAZE_PLOT_PATH        = os.path.join(PROJECT_ROOT, "output", "gaze_position_hist.png")
+MOUSE_PLOT_PATH       = os.path.join(PROJECT_ROOT, "output", "mouse_position_hist.png")
+GAZE_LEN_PLOT_PATH    = os.path.join(PROJECT_ROOT, "output", "gaze_length_category_hist.png")
+MOUSE_LEN_PLOT_PATH   = os.path.join(PROJECT_ROOT, "output", "mouse_length_category_hist.png")
+
+N_BINS = 100
+BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
+BIN_COLS = [f"bin_{i}" for i in range(N_BINS)]
+
+# ---------------------------------------------------------------------------
+# File type configuration  (filename, source_label, response_column)
+# ---------------------------------------------------------------------------
+FILE_CONFIGS = [
+    # gaze
+    ("rel_gaze_query_id_assigned.csv",     "gaze_pointwise",      "llm_response_1"),
+    ("rel_gaze_one_query_id_assigned.csv", "gaze_pairwise_left",  "llm_response_1"),
+    ("rel_gaze_two_query_id_assigned.csv", "gaze_pairwise_right", "llm_response_2"),
+    # mouse
+    ("rel_mouse_query_id_assigned.csv",       "mouse_pointwise",      "llm_response_1"),
+    ("rel_mouse_left_query_id_assigned.csv",  "mouse_pairwise_left",  "llm_response_1"),
+    ("rel_mouse_right_query_id_assigned.csv", "mouse_pairwise_right", "llm_response_2"),
+]
+
+# ---------------------------------------------------------------------------
+# Load query logs and pre-compute response lengths
+# ---------------------------------------------------------------------------
+logs = pd.read_csv(QUERY_LOGS_PATH)
+logs["resp1_len"] = logs["llm_response_1"].str.len().fillna(0).astype(int)
+logs["resp2_len"] = logs["llm_response_2"].str.len().fillna(0).astype(int)
+logs_indexed = logs.set_index(["query_ID", "user_id", "task_id"])
+
+
+def get_response_length(query_id, user_id, task_id, response_col):
+    key = (query_id, user_id, task_id)
+    if key not in logs_indexed.index:
+        return None
+    col = "resp1_len" if response_col == "llm_response_1" else "resp2_len"
+    val = logs_indexed.loc[key, col]
+    if isinstance(val, pd.Series):
+        val = val.iloc[0]
+    return int(val)
+
+
+# ---------------------------------------------------------------------------
+# Process each file
+# ---------------------------------------------------------------------------
+rows = []
+violations = 0
+
+for filename, source, response_col in FILE_CONFIGS:
+    pattern = os.path.join(USER_BEHAVIOR_DIR, "*", "*", filename)
+    for filepath in sorted(glob.glob(pattern)):
+        parts = filepath.split(os.sep)
+        task_id = int(parts[-2])
+        user_id = parts[-3]
+
+        df = pd.read_csv(filepath)
+
+        valid = df[(df["centre_idx"] >= 0) & (df["query_id"] >= 0)].copy()
+        if valid.empty:
+            continue
+
+        for qid, grp in valid.groupby("query_id"):
+            resp_len = get_response_length(int(qid), user_id, task_id, response_col)
+            if not resp_len:
+                continue
+
+            positions = grp["centre_idx"].values / resp_len
+
+            over = (positions > 1).sum()
+            if over > 0:
+                violations += over
+                print(
+                    f"WARNING: {over} samples exceed 1.0 in {filepath} query {qid} "
+                    f"(max={positions.max():.4f}, resp_len={resp_len})"
+                )
+                positions = np.clip(positions, 0, 1)
+
+            counts, _ = np.histogram(positions, bins=BIN_EDGES)
+            total = counts.sum()
+            probs = counts / total if total > 0 else counts.astype(float)
+
+            row = {
+                "user_id": user_id,
+                "task_id": task_id,
+                "query_id": int(qid),
+                "source": source,
+                "response_length": resp_len,
+            }
+            row.update(dict(zip(BIN_COLS, probs)))
+            rows.append(row)
+
+print(f"Total samples with centre_idx/response_length > 1: {violations}")
+print(f"Total (user, task, query, source) groups: {len(rows)}")
+
+# ---------------------------------------------------------------------------
+# Build and save output dataframes
+# ---------------------------------------------------------------------------
+out_df = pd.DataFrame(
+    rows, columns=["user_id", "task_id", "query_id", "source", "response_length"] + BIN_COLS
+)
+
+# Assign length_category using tertiles so each category has ~equal record counts
+out_df["length_category"] = pd.qcut(
+    out_df["response_length"], q=3, labels=["short", "medium", "long"]
+)
+out_df = out_df.drop(columns=["response_length"])
+
+# Reorder: metadata columns first, then bins
+meta_cols = ["user_id", "task_id", "query_id", "source", "length_category"]
+out_df = out_df[meta_cols + BIN_COLS]
+
+counts = out_df["length_category"].value_counts().sort_index()
+print(f"length_category counts: {counts.to_dict()}")
+
+gaze_df  = out_df[out_df["source"].str.startswith("gaze")].reset_index(drop=True)
+mouse_df = out_df[out_df["source"].str.startswith("mouse")].reset_index(drop=True)
+
+gaze_df.to_csv(GAZE_OUTPUT_PATH, index=False)
+print(f"Saved gaze histogram dataframe to {GAZE_OUTPUT_PATH}")
+mouse_df.to_csv(MOUSE_OUTPUT_PATH, index=False)
+print(f"Saved mouse histogram dataframe to {MOUSE_OUTPUT_PATH}")
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+bin_centers = (BIN_EDGES[:-1] + BIN_EDGES[1:]) / 2
+
+
+def _bar(ax, subset, title):
+    avg_probs = subset[BIN_COLS].mean().values
+    ax.bar(bin_centers, avg_probs, width=1 / N_BINS, align="center", edgecolor="none", alpha=0.8)
+    ax.set_title(f"{title} (n={len(subset)})")
+    ax.set_xlabel("Relative position (centre_idx / response_length)")
+    ax.set_ylabel("Average probability")
+    ax.set_xlim(0, 1)
+
+
+def plot_avg_histograms(df, prefix, suptitle, save_path):
+    panels = [
+        ("Overall",                df),
+        (f"{prefix}_pointwise",      df[df["source"] == f"{prefix}_pointwise"]),
+        (f"{prefix}_pairwise_left",  df[df["source"] == f"{prefix}_pairwise_left"]),
+        (f"{prefix}_pairwise_right", df[df["source"] == f"{prefix}_pairwise_right"]),
+    ]
+    fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharey=False)
+    for ax, (title, subset) in zip(axes.flat, panels):
+        _bar(ax, subset, title)
+    fig.suptitle(suptitle, fontsize=13)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.show()
+    print(f"Saved plot to {save_path}")
+
+
+def plot_length_category_histograms(df, suptitle, save_path):
+    categories = ["short", "medium", "long"]
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=False)
+    for ax, cat in zip(axes, categories):
+        _bar(ax, df[df["length_category"] == cat], cat)
+    fig.suptitle(suptitle, fontsize=13)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.show()
+    print(f"Saved plot to {save_path}")
+
+
+# ---------------------------------------------------------------------------
+# Plot gaze and mouse figures
+# ---------------------------------------------------------------------------
+plot_avg_histograms(gaze_df,  "gaze",  "Average gaze position distributions",  GAZE_PLOT_PATH)
+plot_avg_histograms(mouse_df, "mouse", "Average mouse position distributions", MOUSE_PLOT_PATH)
+
+plot_length_category_histograms(
+    gaze_df,  "Gaze position distributions by response length category",  GAZE_LEN_PLOT_PATH
+)
+plot_length_category_histograms(
+    mouse_df, "Mouse position distributions by response length category", MOUSE_LEN_PLOT_PATH
+)
