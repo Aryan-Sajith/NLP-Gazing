@@ -43,11 +43,11 @@ BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
 # Style constants  (mirrors the reference trajectory visualiser)
 # ---------------------------------------------------------------------------
 WRAP       = 60
-FONT_SIZE  = 7
-BG         = '#0b0b18'
-PANBG      = '#10101e'
-TXTCLR     = '#6b6b8a'
-BORDERS    = ['#00b4d8', '#4cc9f0']
+FONT_SIZE  = 9
+BG         = 'white'
+PANBG      = '#f5f5f5'
+TXTCLR     = '#222222'
+BORDERS    = ['#0077b6', '#023e8a']
 
 # Character-grid coordinate space for pymovements
 CHAR_SCALE  = 14    # "pixels" per char unit  (arbitrary; sets spatial resolution)
@@ -246,17 +246,17 @@ def draw_hist_panel(ax, avg_probs: np.ndarray, border: str,
     ax.set_facecolor(PANBG)
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(1.5)
-    ax.tick_params(colors='white', labelsize=7)
+    ax.tick_params(colors='black', labelsize=7)
     ax.bar(bin_centers, avg_probs, width=1 / N_BINS, align='center',
            color=border, edgecolor='none', alpha=0.75)
     ax.set_xlim(0, 1)
     ax.set_xlabel('Relative position  (char_idx / response_length)',
-                  color='white', fontsize=8)
-    ax.set_ylabel('Average probability', color='white', fontsize=8)
+                  color='black', fontsize=8)
+    ax.set_ylabel('Average probability', color='black', fontsize=8)
     ax.set_title(f'[{source_label}]  avg histogram  (n={n_samples} {LENGTH_CATEGORY} samples)',
                  color=border, fontsize=9, pad=4)
-    ax.yaxis.grid(True, color='#222244', linewidth=0.5, zorder=0)
-    ax.xaxis.grid(True, color='#222244', linewidth=0.5, zorder=0)
+    ax.yaxis.grid(True, color='#cccccc', linewidth=0.5, zorder=0)
+    ax.xaxis.grid(True, color='#cccccc', linewidth=0.5, zorder=0)
     ax.set_axisbelow(True)
 
 
@@ -304,7 +304,7 @@ fig.suptitle(
     f'{SRC_LEFT}  |  {SRC_RIGHT}\n'
     f'Randomly selected: user={user_id}  task={task_id}  query={query_id}  ·  '
     f'{len(medium_left)} left samples  /  {len(medium_right)} right samples',
-    color='white', fontsize=12, fontweight='bold', y=1.0,
+    color='black', fontsize=12, fontweight='bold', y=1.0,
 )
 
 gs = gridspec.GridSpec(
@@ -369,10 +369,10 @@ pm.plotting.heatmap(
 for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(2.0)
-    ax.tick_params(colors='white', labelsize=7)
-    ax.title.set_color('white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
+    ax.tick_params(colors='black', labelsize=7)
+    ax.title.set_color('black')
+    ax.xaxis.label.set_color('black')
+    ax.yaxis.label.set_color('black')
 
 # ── Average histogram bar charts ────────────────────────────────────────────
 draw_hist_panel(ax_hist_left,  avg_left,  BORDERS[0], SRC_LEFT,  len(medium_left))
