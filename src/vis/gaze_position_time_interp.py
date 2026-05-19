@@ -178,26 +178,33 @@ print(f"Saved mouse time-interpolated dataframe to {MOUSE_OUTPUT_PATH}")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def _line(ax, subset, title):
-    avg_pos = subset[POS_COLS].mean().values
-    ax.plot(INTERP_TIMES, avg_pos)
-    ax.set_title(f"{title} (n={len(subset)})")
-    ax.set_xlabel("Normalized time")
-    ax.set_ylabel("Average relative position")
-    ax.set_xlim(0, 1)
+AVG_CURVE_STYLES = [
+    ("Overall",          None,                 {"color": "black",      "lw": 2.5, "ls": "-"}),
+    ("pointwise",        "{p}_pointwise",      {"color": "tab:blue",   "lw": 1.5, "ls": "--"}),
+    ("pairwise (left)",  "{p}_pairwise_left",  {"color": "tab:orange", "lw": 1.5, "ls": "-."}),
+    ("pairwise (right)", "{p}_pairwise_right", {"color": "tab:green",  "lw": 1.5, "ls": ":"}),
+]
+
+LEN_CAT_STYLES = {
+    "short":  {"color": "tab:blue",   "lw": 1.5, "ls": "-"},
+    "medium": {"color": "tab:orange", "lw": 1.5, "ls": "--"},
+    "long":   {"color": "tab:green",  "lw": 1.5, "ls": "-."},
+}
 
 
 def plot_avg_curves(df, prefix, suptitle, save_path):
-    panels = [
-        ("Overall",                df),
-        (f"{prefix}_pointwise",      df[df["source"] == f"{prefix}_pointwise"]),
-        (f"{prefix}_pairwise_left",  df[df["source"] == f"{prefix}_pairwise_left"]),
-        (f"{prefix}_pairwise_right", df[df["source"] == f"{prefix}_pairwise_right"]),
-    ]
-    fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharey=False)
-    for ax, (title, subset) in zip(axes.flat, panels):
-        _line(ax, subset, title)
-    fig.suptitle(suptitle, fontsize=13)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for label, source_tpl, style in AVG_CURVE_STYLES:
+        subset = df if source_tpl is None else df[df["source"] == source_tpl.format(p=prefix)]
+        if subset.empty:
+            continue
+        avg_pos = subset[POS_COLS].mean().values
+        ax.plot(INTERP_TIMES, avg_pos, label=f"{label} (n={len(subset)})", **style)
+    ax.set_xlabel("Normalized time")
+    ax.set_ylabel("Average relative position")
+    ax.set_xlim(0, 1)
+    ax.legend()
+    ax.set_title(suptitle, fontsize=13)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     plt.show()
@@ -205,11 +212,18 @@ def plot_avg_curves(df, prefix, suptitle, save_path):
 
 
 def plot_length_category_curves(df, suptitle, save_path):
-    categories = ["short", "medium", "long"]
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=False)
-    for ax, cat in zip(axes, categories):
-        _line(ax, df[df["length_category"] == cat], cat)
-    fig.suptitle(suptitle, fontsize=13)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for cat, style in LEN_CAT_STYLES.items():
+        subset = df[df["length_category"] == cat]
+        if subset.empty:
+            continue
+        avg_pos = subset[POS_COLS].mean().values
+        ax.plot(INTERP_TIMES, avg_pos, label=f"{cat} (n={len(subset)})", **style)
+    ax.set_xlabel("Normalized time")
+    ax.set_ylabel("Average relative position")
+    ax.set_xlim(0, 1)
+    ax.legend()
+    ax.set_title(suptitle, fontsize=13)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     plt.show()
