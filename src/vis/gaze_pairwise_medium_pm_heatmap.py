@@ -179,22 +179,25 @@ def build_map(text: str, wrap_width: int = WRAP):
 # ---------------------------------------------------------------------------
 def render_text_background(display_lines: list[str], n_lines: int,
                            filepath: str, dpi: int = 100) -> None:
-    """Save monospace text on dark background to PNG for use as pm stimulus."""
-    # Coordinate space: x in [0, WRAP], y in [0, n_lines] with y=0 at top.
-    # Figure size chosen to give reasonable character proportions.
-    fig_w = WRAP * 0.15          # inches
-    fig_h = n_lines * 0.22       # inches
-    fig, ax = plt.subplots(figsize=(max(fig_w, 4), max(fig_h, 2)), facecolor=BG)
+    """Save monospace text on background to PNG for use as pm stimulus.
+
+    The image is sized to exactly WRAP*CHAR_SCALE × n_lines*CHAR_SCALE pixels
+    so that it maps 1-to-1 onto the pymovements pixel coordinate space and
+    text characters align with their heatmap positions.
+    """
+    fig_w = WRAP * CHAR_SCALE / dpi        # exact pixel match in x
+    fig_h = n_lines * CHAR_SCALE / dpi     # exact pixel match in y
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=BG)
     ax.set_facecolor(BG)
     ax.set_xlim(0, WRAP)
     ax.set_ylim(n_lines, 0)   # y=0 at top, y=n_lines at bottom
     ax.axis('off')
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)   # no margins
     fp = FontProperties(size=FONT_SIZE, family='monospace')
     for ln, line in enumerate(display_lines):
         ax.text(0, ln + 0.5, line, fontproperties=fp,
                 color=TXTCLR, va='center', ha='left', clip_on=True)
-    fig.savefig(filepath, dpi=dpi, bbox_inches='tight', pad_inches=0,
-                facecolor=BG)
+    fig.savefig(filepath, dpi=dpi, facecolor=BG)
     plt.close(fig)
 
 
@@ -302,7 +305,6 @@ fig = plt.figure(figsize=(18, fig_h), facecolor=BG)
 fig.suptitle(
     f'Interpolated {MODALITY.capitalize()} Heatmap  (pymovements)  —  {LENGTH_CATEGORY.capitalize()} Response Length  ·  '
     f'{SRC_LEFT}  |  {SRC_RIGHT}\n'
-    f'Randomly selected: user={user_id}  task={task_id}  query={query_id}  ·  '
     f'{len(medium_left)} left samples  /  {len(medium_right)} right samples',
     color='black', fontsize=12, fontweight='bold', y=1.0,
 )
@@ -332,7 +334,7 @@ pm.plotting.heatmap(
     origin='upper',
     show_cbar=True,
     cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_LEFT}]  query {query_id}  ·  user {user_id}  ·  {ts}\n'
+    title=(f'[{SRC_LEFT}]  query {query_id}  ·  {ts}\n'
            f'"{short1}…"  ·  {len(text1)} chars'),
     xlabel='Character column',
     ylabel='Text line',
@@ -353,7 +355,7 @@ pm.plotting.heatmap(
     origin='upper',
     show_cbar=True,
     cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_RIGHT}]  query {query_id}  ·  user {user_id}  ·  {ts}\n'
+    title=(f'[{SRC_RIGHT}]  query {query_id}  ·  {ts}\n'
            f'"{short2}…"  ·  {len(text2)} chars'),
     xlabel='Character column',
     ylabel='Text line',
