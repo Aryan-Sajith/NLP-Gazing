@@ -13,11 +13,10 @@ The 6 cluster centroids are plotted as bar charts in a single 2x3 figure.
 """
 
 import os
-import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.cluster import BisectingKMeans
+from sklearn.cluster import BisectingKMeans, KMeans
 from scipy.cluster.hierarchy import dendrogram
 
 # ---------------------------------------------------------------------------
@@ -31,6 +30,7 @@ DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 #N_CLUSTERS = 20
 N_CLUSTERS = 10
 RANDOM_STATE = 42
+N_GROUPS = 3        # number of shape-similarity groups for centroid/sample plots
 
 # ---------------------------------------------------------------------------
 # Derived paths and source label
@@ -74,79 +74,75 @@ centroids = kmeans.cluster_centers_
 cluster_counts = np.bincount(labels, minlength=N_CLUSTERS)
 
 # ---------------------------------------------------------------------------
-# Shared plot helpers
+# Shared colormap (one color per cluster, consistent across all figures)
 # ---------------------------------------------------------------------------
-def _make_figure(n_panels):
-    n_cols = math.ceil(math.sqrt(n_panels))
-    n_rows = math.ceil(n_panels / n_cols)
-    label_fs = max(6, 10 - n_cols)
-    title_fs = max(7, 11 - n_cols)
-    tick_fs  = max(5,  9 - n_cols)
-    fig, axes = plt.subplots(
-        n_rows, n_cols,
-        figsize=(n_cols * 6, n_rows * 4),
-        sharey=False,
-        constrained_layout=True,
-    )
-    return fig, axes, n_cols, n_rows, label_fs, title_fs, tick_fs
+_cmap = plt.get_cmap("tab10" if N_CLUSTERS <= 10 else "tab20")
+CLUSTER_COLORS = [_cmap(i / max(N_CLUSTERS - 1, 1)) for i in range(N_CLUSTERS)]
 
 
-def _style_ax(ax, title, label_fs, title_fs, tick_fs):
-    ax.set_title(title, fontsize=title_fs)
+def _ax_labels(ax):
     if DATA_TYPE == "time_interp":
-        ax.set_xlabel("Normalized time", fontsize=label_fs)
-        ax.set_ylabel("Relative position\n(centre_idx / response_length)", fontsize=label_fs)
+        ax.set_xlabel("Normalized time")
+        ax.set_ylabel("Average relative position\n(centre_idx / response_length)")
     else:
-        ax.set_xlabel("Relative position\n(centre_idx / response_length)", fontsize=label_fs)
-        ax.set_ylabel("Average probability", fontsize=label_fs)
+        ax.set_xlabel("Relative position\n(centre_idx / response_length)")
+        ax.set_ylabel("Average probability")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.tick_params(labelsize=tick_fs)
 
 
 # ---------------------------------------------------------------------------
-# Figure 1 — cluster centroids
+# Figure 1 — cluster centroids grouped by shape (N_GROUPS panels)
 # ---------------------------------------------------------------------------
-fig1, axes1, n_cols, n_rows, label_fs, title_fs, tick_fs = _make_figure(N_CLUSTERS)
-bar_width = 1 / N_BINS
+_centroid_group_labels = KMeans(
+    n_clusters=N_GROUPS, random_state=RANDOM_STATE, n_init=10
+).fit_predict(centroids)
 
-for idx, ax in enumerate(axes1.flat):
-    if idx < N_CLUSTERS:
-        ax.bar(BIN_CENTERS, centroids[idx], width=bar_width, align="center",
-               edgecolor="none", alpha=0.8)
-        _style_ax(ax, f"Cluster {idx + 1}  (n={cluster_counts[idx]})", label_fs, title_fs, tick_fs)
-    else:
-        ax.set_visible(False)
+fig1, axes1 = plt.subplots(1, N_GROUPS, figsize=(6 * N_GROUPS, 5),
+                            sharey=True, constrained_layout=True)
+for g, ax in enumerate(axes1):
+    member_idxs = np.where(_centroid_group_labels == g)[0]
+    for idx in member_idxs:
+        ax.plot(BIN_CENTERS, centroids[idx], color=CLUSTER_COLORS[idx], lw=1.5,
+                label=f"C{idx + 1} (n={cluster_counts[idx]})")
+    _ax_labels(ax)
+    ax.legend(fontsize=8)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=10)
 
 fig1.suptitle(
     f"BisectingKMeans (k={N_CLUSTERS}, largest_cluster) — {SOURCE_LABEL}  "
     f"(total n={len(subset)})",
-    fontsize=max(9, 13 - n_cols),
+    fontsize=11,
 )
 fig1.savefig(OUTPUT_PATH, dpi=150)
 print(f"Saved centroids plot to {OUTPUT_PATH}")
 
 # ---------------------------------------------------------------------------
-# Figure 2 — random sample of N_CLUSTERS rows
+# Figure 2 — random sample rows grouped by shape (N_GROUPS panels)
 # ---------------------------------------------------------------------------
 rng = np.random.default_rng(RANDOM_STATE)
 sample_idx = rng.choice(len(subset), size=N_CLUSTERS, replace=False)
 sample_rows = X[sample_idx]
 
-fig2, axes2, n_cols2, _, label_fs2, title_fs2, tick_fs2 = _make_figure(N_CLUSTERS)
+_sample_group_labels = KMeans(
+    n_clusters=N_GROUPS, random_state=RANDOM_STATE, n_init=10
+).fit_predict(sample_rows)
 
-for idx, ax in enumerate(axes2.flat):
-    if idx < N_CLUSTERS:
+fig2, axes2 = plt.subplots(1, N_GROUPS, figsize=(6 * N_GROUPS, 5),
+                            sharey=True, constrained_layout=True)
+for g, ax in enumerate(axes2):
+    member_idxs = np.where(_sample_group_labels == g)[0]
+    for idx in member_idxs:
         row_i = sample_idx[idx]
-        ax.bar(BIN_CENTERS, sample_rows[idx], width=bar_width, align="center",
-               edgecolor="none", alpha=0.8)
-        _style_ax(ax, f"Sample {idx + 1}  (row {row_i})", label_fs2, title_fs2, tick_fs2)
-    else:
-        ax.set_visible(False)
+        ax.plot(BIN_CENTERS, sample_rows[idx], color=CLUSTER_COLORS[idx], lw=1.2, alpha=0.75,
+                label=f"Sample {idx + 1} (row {row_i})")
+    _ax_labels(ax)
+    ax.legend(fontsize=8)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=10)
 
 fig2.suptitle(
     f"Random samples (n={N_CLUSTERS}) — {SOURCE_LABEL}  (total n={len(subset)})",
-    fontsize=max(9, 13 - n_cols2),
+    fontsize=11,
 )
 fig2.savefig(OUTPUT_PATH_SAMPLE, dpi=150)
 print(f"Saved samples plot to {OUTPUT_PATH_SAMPLE}")
@@ -253,47 +249,35 @@ while _bfs_q:
         _bfs_q.append((_node.left,  _depth + 1, _depth, _pos))
         _bfs_q.append((_node.right, _depth + 1, _depth, _pos))
 
-_n_layers       = len(_node_by_layer)
-_max_per_layer  = max(len(v) for v in _node_by_layer.values())
+_n_layers = len(_node_by_layer)
 
 fig4, axes4 = plt.subplots(
-    _n_layers, _max_per_layer,
-    figsize=(max(_max_per_layer * 5, 8), _n_layers * 3.5),
+    _n_layers, 1,
+    figsize=(9, _n_layers * 3),
     squeeze=False,
     constrained_layout=True,
 )
-for _row in axes4:
-    for _ax in _row:
-        _ax.set_visible(False)
 
 for _depth in range(_n_layers):
+    _ax = axes4[_depth, 0]
     _nodes = _node_by_layer[_depth]
-    _n     = len(_nodes)
-    _start = (_max_per_layer - _n) // 2  # centre nodes within the row
+    _layer_cmap = plt.get_cmap("tab10" if len(_nodes) <= 10 else "tab20")
 
     for _pos, (_node, _par_depth, _par_pos) in enumerate(_nodes):
-        _ax = axes4[_depth, _start + _pos]
-        _ax.set_visible(True)
         _center = _true_center(_node, X, labels)
-        _ax.bar(BIN_CENTERS, _center, width=bar_width,
-                align="center", edgecolor="none", alpha=0.8)
-        _ax.set_xlim(0, 1)
-        _ax.set_ylim(0, 1)
-        _ax.tick_params(labelsize=6)
-        if DATA_TYPE == "time_interp":
-            _ax.set_xlabel("Norm. time", fontsize=7)
-            _ax.set_ylabel("Rel. position", fontsize=7)
-        else:
-            _ax.set_xlabel("Rel. position", fontsize=7)
-            _ax.set_ylabel("Avg. prob.", fontsize=7)
+        _n_samples = sum(cluster_counts[lbl] for lbl in _subtree_leaf_labels(_node))
+        _leaf_tag  = f" [C{_node.label + 1}]" if _node.left is None else ""
+        _node_color = _layer_cmap(_pos / max(len(_nodes) - 1, 1))
+        _ax.plot(BIN_CENTERS, _center, color=_node_color, lw=1.5,
+                 label=f"Node {_pos}{_leaf_tag} (n={_n_samples})")
 
-        _n_samples  = sum(cluster_counts[lbl] for lbl in _subtree_leaf_labels(_node))
-        _leaf_tag   = f"  [C{_node.label + 1}]" if _node.left is None else ""
-        _parent_tag = "(root)" if _par_depth is None else f"↑ Layer {_par_depth}, Node {_par_pos}"
-        _ax.set_title(
-            f"Layer {_depth}, Node {_pos}{_leaf_tag}  (n={_n_samples})\n{_parent_tag}",
-            fontsize=8,
-        )
+    _ax_labels(_ax)
+    _ax.tick_params(labelsize=8)
+    _ax.set_title(
+        f"Layer {_depth}  ({len(_nodes)} node{'s' if len(_nodes) > 1 else ''})",
+        fontsize=10,
+    )
+    _ax.legend(fontsize=7, ncol=min(4, len(_nodes)))
 
 fig4.suptitle(
     f"BisectingKMeans centers by layer — {SOURCE_LABEL}  (k={N_CLUSTERS})",
