@@ -18,6 +18,7 @@ Layout
 import os
 import csv
 import random
+from worker_filter import BAD_WORKERS
 import tempfile
 import numpy as np
 import polars as pl
@@ -55,6 +56,8 @@ N_TOTAL     = 8000  # total weighted gaze samples per panel
 JITTER_STD  = 1.8   # Gaussian position jitter (char units) for smooth interpolation
 
 RANDOM_SEED = None  # set to int for reproducible pair selection
+EXCLUDE_BAD_WORKERS = True   # set False to include all workers
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
 # ---------------------------------------------------------------------------
 # *** Hyperparameters ***
@@ -69,13 +72,16 @@ assert MODALITY in ('gaze', 'mouse'), \
     f"MODALITY must be 'gaze' or 'mouse', got '{MODALITY}'"
 
 # Derived from MODALITY
-_HIST_FILE  = 'user_gazing_hist.csv' if MODALITY == 'gaze' else 'user_mouse_hist.csv'
-HIST_PATH   = os.path.join(PROJECT_ROOT, "output", _HIST_FILE)
-SRC_LEFT    = f'{MODALITY}_pairwise_left'
-SRC_RIGHT   = f'{MODALITY}_pairwise_right'
+_DATA_DIR  = os.path.join(PROJECT_ROOT, "output", "data")
+_HEAT_DIR  = os.path.join(PROJECT_ROOT, "output", "heatmap")
+os.makedirs(_HEAT_DIR, exist_ok=True)
+_HIST_FILE = f'user_gazing_hist_{_qc}.csv' if MODALITY == 'gaze' else f'user_mouse_hist_{_qc}.csv'
+HIST_PATH  = os.path.join(_DATA_DIR, _HIST_FILE)
+SRC_LEFT   = f'{MODALITY}_pairwise_left'
+SRC_RIGHT  = f'{MODALITY}_pairwise_right'
 
-OUTPUT_PATH = os.path.join(PROJECT_ROOT, "output",
-                           f"{MODALITY}_pairwise_{LENGTH_CATEGORY}_pm_heatmap.png")
+OUTPUT_PATH = os.path.join(_HEAT_DIR,
+                           f"{MODALITY}_pairwise_{LENGTH_CATEGORY}_pm_heatmap_{_qc}.png")
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +91,9 @@ hist_rows: list[dict] = []
 with open(HIST_PATH) as f:
     for row in csv.DictReader(f):
         hist_rows.append(row)
+
+if EXCLUDE_BAD_WORKERS:
+    hist_rows = [r for r in hist_rows if r['user_id'] not in BAD_WORKERS]
 
 medium_left  = [r for r in hist_rows
                 if r['length_category'] == LENGTH_CATEGORY

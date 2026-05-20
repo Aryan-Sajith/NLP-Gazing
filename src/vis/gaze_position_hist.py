@@ -14,19 +14,31 @@ import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from worker_filter import BAD_WORKERS
+
+# ---------------------------------------------------------------------------
+# Hyperparameters
+# ---------------------------------------------------------------------------
+EXCLUDE_BAD_WORKERS = True   # set False to include all workers
+
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 USER_BEHAVIOR_DIR = os.path.join(PROJECT_ROOT, "user_behavior")
-QUERY_LOGS_PATH = os.path.join(PROJECT_ROOT, "query_logs_table.csv")
-GAZE_OUTPUT_PATH  = os.path.join(PROJECT_ROOT, "output", "user_gazing_hist.csv")
-MOUSE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "output", "user_mouse_hist.csv")
-GAZE_PLOT_PATH        = os.path.join(PROJECT_ROOT, "output", "gaze_position_hist.png")
-MOUSE_PLOT_PATH       = os.path.join(PROJECT_ROOT, "output", "mouse_position_hist.png")
-GAZE_LEN_PLOT_PATH    = os.path.join(PROJECT_ROOT, "output", "gaze_length_category_hist.png")
-MOUSE_LEN_PLOT_PATH   = os.path.join(PROJECT_ROOT, "output", "mouse_length_category_hist.png")
+QUERY_LOGS_PATH   = os.path.join(PROJECT_ROOT, "query_logs_table.csv")
+_DATA_DIR = os.path.join(PROJECT_ROOT, "output", "data")
+_POS_DIR  = os.path.join(PROJECT_ROOT, "output", "position")
+os.makedirs(_DATA_DIR, exist_ok=True)
+os.makedirs(_POS_DIR,  exist_ok=True)
+GAZE_OUTPUT_PATH  = os.path.join(_DATA_DIR, f"user_gazing_hist_{_qc}.csv")
+MOUSE_OUTPUT_PATH = os.path.join(_DATA_DIR, f"user_mouse_hist_{_qc}.csv")
+GAZE_PLOT_PATH        = os.path.join(_POS_DIR, f"gaze_position_hist_{_qc}.png")
+MOUSE_PLOT_PATH       = os.path.join(_POS_DIR, f"mouse_position_hist_{_qc}.png")
+GAZE_LEN_PLOT_PATH    = os.path.join(_POS_DIR, f"gaze_length_category_hist_{_qc}.png")
+MOUSE_LEN_PLOT_PATH   = os.path.join(_POS_DIR, f"mouse_length_category_hist_{_qc}.png")
 
 N_BINS = 100
 BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
@@ -78,6 +90,8 @@ for filename, source, response_col in FILE_CONFIGS:
         parts = filepath.split(os.sep)
         task_id = int(parts[-2])
         user_id = parts[-3]
+        if EXCLUDE_BAD_WORKERS and user_id in BAD_WORKERS:
+            continue
 
         df = pd.read_csv(filepath)
 

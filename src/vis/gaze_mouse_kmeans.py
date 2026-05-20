@@ -18,6 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.cluster import BisectingKMeans, KMeans
 from scipy.cluster.hierarchy import dendrogram
+from worker_filter import BAD_WORKERS
 
 # ---------------------------------------------------------------------------
 # Hyperparameters
@@ -28,6 +29,8 @@ SIDE      = "left"        # "left" or "right"
 DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 
 RANDOM_STATE = 42
+EXCLUDE_BAD_WORKERS = True   # set False to include all workers
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 N_GROUPS = 2        # number of shape-similarity groups for centroid/sample plots
 MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
 
@@ -39,16 +42,21 @@ N_CLUSTERS = 6 if DATA_TYPE == "histogram" else 10
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+_DATA_DIR   = os.path.join(PROJECT_ROOT, "output", "data")
+_KMEANS_DIR = os.path.join(PROJECT_ROOT, "output", "kmeans")
+os.makedirs(_KMEANS_DIR, exist_ok=True)
+
 if DATA_TYPE == "time_interp":
     _modality_stem = "gazing" if MODALITY == "gaze" else "mouse"
-    _INPUT_FILE = f"user_{_modality_stem}_time_interp.csv"
+    _INPUT_FILE = f"user_{_modality_stem}_time_interp_{_qc}.csv"
 else:
-    _INPUT_FILE = "user_gazing_hist.csv" if MODALITY == "gaze" else "user_mouse_hist.csv"
-INPUT_PATH = os.path.join(PROJECT_ROOT, "output", _INPUT_FILE)
+    _INPUT_FILE = f"user_gazing_hist_{_qc}.csv" if MODALITY == "gaze" else f"user_mouse_hist_{_qc}.csv"
+INPUT_PATH = os.path.join(_DATA_DIR, _INPUT_FILE)
 
 SOURCE_LABEL = f"{MODALITY}_pairwise_{SIDE}"
-OUTPUT_PATH        = os.path.join(PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans.png")
-OUTPUT_PATH_SAMPLE = os.path.join(PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans_samples.png")
+_stem = f"{SOURCE_LABEL}_kmeans_{DATA_TYPE}_{_qc}"
+OUTPUT_PATH        = os.path.join(_KMEANS_DIR, f"{_stem}.png")
+OUTPUT_PATH_SAMPLE = os.path.join(_KMEANS_DIR, f"{_stem}_samples.png")
 
 N_BINS = 100
 _COL_PREFIX = "pos" if DATA_TYPE == "time_interp" else "bin"
@@ -59,6 +67,8 @@ BIN_CENTERS = (np.linspace(0, 1, N_BINS + 1)[:-1] + np.linspace(0, 1, N_BINS + 1
 # Load and filter
 # ---------------------------------------------------------------------------
 df = pd.read_csv(INPUT_PATH)
+if EXCLUDE_BAD_WORKERS:
+    df = df[~df["user_id"].isin(BAD_WORKERS)]
 subset = df[df["source"] == SOURCE_LABEL].reset_index(drop=True)
 print(f"Rows for {SOURCE_LABEL}: {len(subset)}")
 
@@ -228,9 +238,7 @@ ax3.set_title(
 )
 ax3.set_ylabel("Cluster inertia at split", fontsize=10)
 
-OUTPUT_PATH_DENDRO = os.path.join(
-    PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans_dendrogram.png"
-)
+OUTPUT_PATH_DENDRO = os.path.join(_KMEANS_DIR, f"{_stem}_dendrogram.png")
 fig3.savefig(OUTPUT_PATH_DENDRO, dpi=150)
 print(f"Saved dendrogram to {OUTPUT_PATH_DENDRO}")
 
@@ -296,9 +304,7 @@ fig4.suptitle(
     f"BisectingKMeans centers by layer — {SOURCE_LABEL}  (k={N_CLUSTERS})",
     fontsize=12,
 )
-OUTPUT_PATH_LAYERS = os.path.join(
-    PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans_layers.png"
-)
+OUTPUT_PATH_LAYERS = os.path.join(_KMEANS_DIR, f"{_stem}_layers.png")
 fig4.savefig(OUTPUT_PATH_LAYERS, dpi=150)
 print(f"Saved layer-by-layer centers to {OUTPUT_PATH_LAYERS}")
 

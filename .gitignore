@@ -210,7 +210,6 @@ marimo/_lsp/
 __marimo__/
 
 # Ignore local user gazing data files
-data/
 user_behavior/
 user_behavior_org/
 data_dump/

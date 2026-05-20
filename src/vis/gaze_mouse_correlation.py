@@ -17,16 +17,26 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr, spearmanr, gaussian_kde
+from worker_filter import BAD_WORKERS
+
+# ---------------------------------------------------------------------------
+# Hyperparameters
+# ---------------------------------------------------------------------------
+EXCLUDE_BAD_WORKERS = True  # set False to include all workers
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GAZE_PATH    = os.path.join(PROJECT_ROOT, "output", "user_gazing_time_interp.csv")
-MOUSE_PATH   = os.path.join(PROJECT_ROOT, "output", "user_mouse_time_interp.csv")
-PER_QUERY_OUT = os.path.join(PROJECT_ROOT, "output", "gaze_mouse_correlation_per_query.csv")
-SUMMARY_OUT   = os.path.join(PROJECT_ROOT, "output", "gaze_mouse_correlation_summary.csv")
-PLOT_OUT      = os.path.join(PROJECT_ROOT, "output", "gaze_mouse_correlation.png")
+_DATA_DIR  = os.path.join(PROJECT_ROOT, "output", "data")
+_CORR_DIR  = os.path.join(PROJECT_ROOT, "output", "correlation")
+os.makedirs(_CORR_DIR, exist_ok=True)
+GAZE_PATH     = os.path.join(_DATA_DIR, f"user_gazing_time_interp_{_qc}.csv")
+MOUSE_PATH    = os.path.join(_DATA_DIR, f"user_mouse_time_interp_{_qc}.csv")
+PER_QUERY_OUT = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_per_query_{_qc}.csv")
+SUMMARY_OUT   = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_summary_{_qc}.csv")
+PLOT_OUT      = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_{_qc}.png")
 
 N_POINTS = 100
 POS_COLS = [f"pos_{i}" for i in range(N_POINTS)]
@@ -37,6 +47,9 @@ SIG_THRESHOLD = 0.05
 # ---------------------------------------------------------------------------
 gaze  = pd.read_csv(GAZE_PATH)
 mouse = pd.read_csv(MOUSE_PATH)
+if EXCLUDE_BAD_WORKERS:
+    gaze  = gaze[~gaze["user_id"].isin(BAD_WORKERS)]
+    mouse = mouse[~mouse["user_id"].isin(BAD_WORKERS)]
 
 
 def _strip_modality(src: str) -> str:
