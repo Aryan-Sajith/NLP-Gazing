@@ -23,14 +23,16 @@ from scipy.cluster.hierarchy import dendrogram
 # Hyperparameters
 # ---------------------------------------------------------------------------
 MODALITY  = "gaze"        # "gaze" or "mouse"
-SIDE      = "left"        # "left" or "right"
-#DATA_TYPE = "histogram"    # "histogram" or "time_interp"
-DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
+SIDE      = "right"        # "left" or "right"
+DATA_TYPE = "histogram"    # "histogram" or "time_interp"
+#DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 
-#N_CLUSTERS = 20
-N_CLUSTERS = 10
 RANDOM_STATE = 42
 N_GROUPS = 3        # number of shape-similarity groups for centroid/sample plots
+MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
+
+# histogram needs a lower k to avoid tiny outlier clusters; time_interp handles k=10 fine
+N_CLUSTERS = 6 if DATA_TYPE == "histogram" else 10
 
 # ---------------------------------------------------------------------------
 # Derived paths and source label
@@ -84,24 +86,34 @@ def _ax_labels(ax):
     if DATA_TYPE == "time_interp":
         ax.set_xlabel("Normalized time")
         ax.set_ylabel("Average relative position\n(centre_idx / response_length)")
+        ax.set_ylim(0, 1)
     else:
         ax.set_xlabel("Relative position\n(centre_idx / response_length)")
         ax.set_ylabel("Average probability")
+        ax.set_ylim(bottom=0)   # auto-scale top; histogram probs are ~0–0.05
     ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
 
 
 # ---------------------------------------------------------------------------
 # Figure 1 — cluster centroids grouped by shape (N_GROUPS panels)
 # ---------------------------------------------------------------------------
-_centroid_group_labels = KMeans(
-    n_clusters=N_GROUPS, random_state=RANDOM_STATE, n_init=10
-).fit_predict(centroids)
+_valid_idxs = np.where(cluster_counts >= MIN_CLUSTER_SAMPLES)[0]
+_skipped = np.where(cluster_counts < MIN_CLUSTER_SAMPLES)[0]
+if len(_skipped):
+    print(f"Excluding {len(_skipped)} tiny cluster(s) from group plot: "
+          + ", ".join(f"C{i+1}(n={cluster_counts[i]})" for i in _skipped))
 
-fig1, axes1 = plt.subplots(1, N_GROUPS, figsize=(6 * N_GROUPS, 5),
-                            sharey=True, constrained_layout=True)
+_n_groups = min(N_GROUPS, len(_valid_idxs))   # can't have more groups than valid clusters
+_centroid_group_labels = KMeans(
+    n_clusters=_n_groups, random_state=RANDOM_STATE, n_init=10
+).fit_predict(centroids[_valid_idxs])
+
+_sharey = DATA_TYPE == "time_interp"   # histogram groups have very different y ranges
+fig1, axes1 = plt.subplots(1, _n_groups, figsize=(6 * _n_groups, 5),
+                            sharey=_sharey, constrained_layout=True)
 for g, ax in enumerate(axes1):
-    member_idxs = np.where(_centroid_group_labels == g)[0]
+    member_positions = np.where(_centroid_group_labels == g)[0]
+    member_idxs = _valid_idxs[member_positions]
     for idx in member_idxs:
         ax.plot(BIN_CENTERS, centroids[idx], color=CLUSTER_COLORS[idx], lw=1.5,
                 label=f"C{idx + 1} (n={cluster_counts[idx]})")
@@ -111,7 +123,7 @@ for g, ax in enumerate(axes1):
 
 fig1.suptitle(
     f"BisectingKMeans (k={N_CLUSTERS}, largest_cluster) — {SOURCE_LABEL}  "
-    f"(total n={len(subset)})",
+    f"(total n={len(subset)}, excluding clusters n<{MIN_CLUSTER_SAMPLES})",
     fontsize=11,
 )
 fig1.savefig(OUTPUT_PATH, dpi=150)
@@ -124,12 +136,13 @@ rng = np.random.default_rng(RANDOM_STATE)
 sample_idx = rng.choice(len(subset), size=N_CLUSTERS, replace=False)
 sample_rows = X[sample_idx]
 
+_n_sample_groups = min(N_GROUPS, N_CLUSTERS)
 _sample_group_labels = KMeans(
-    n_clusters=N_GROUPS, random_state=RANDOM_STATE, n_init=10
+    n_clusters=_n_sample_groups, random_state=RANDOM_STATE, n_init=10
 ).fit_predict(sample_rows)
 
-fig2, axes2 = plt.subplots(1, N_GROUPS, figsize=(6 * N_GROUPS, 5),
-                            sharey=True, constrained_layout=True)
+fig2, axes2 = plt.subplots(1, _n_sample_groups, figsize=(6 * _n_sample_groups, 5),
+                            sharey=_sharey, constrained_layout=True)
 for g, ax in enumerate(axes2):
     member_idxs = np.where(_sample_group_labels == g)[0]
     for idx in member_idxs:
