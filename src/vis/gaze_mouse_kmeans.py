@@ -23,12 +23,12 @@ from scipy.cluster.hierarchy import dendrogram
 # Hyperparameters
 # ---------------------------------------------------------------------------
 MODALITY  = "gaze"        # "gaze" or "mouse"
-SIDE      = "right"        # "left" or "right"
-DATA_TYPE = "histogram"    # "histogram" or "time_interp"
-#DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
+SIDE      = "left"        # "left" or "right"
+# DATA_TYPE = "histogram"    # "histogram" or "time_interp"
+DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 
 RANDOM_STATE = 42
-N_GROUPS = 3        # number of shape-similarity groups for centroid/sample plots
+N_GROUPS = 2        # number of shape-similarity groups for centroid/sample plots
 MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
 
 # histogram needs a lower k to avoid tiny outlier clusters; time_interp handles k=10 fine
