@@ -30,6 +30,19 @@ import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches
 from matplotlib.font_manager import FontProperties
 
+
+def _measure_char_dims(font_size: int, family: str = 'monospace', dpi: int = 100) -> tuple[int, int]:
+    """Return (char_width_px, line_height_px) as rendered by matplotlib at the given DPI."""
+    fig, ax = plt.subplots(figsize=(6, 2), dpi=dpi)
+    fp = FontProperties(size=font_size, family=family)
+    t = ax.text(0, 0.5, 'M' * 20, fontproperties=fp, transform=ax.transData)
+    fig.canvas.draw()
+    bb = t.get_window_extent(fig.canvas.get_renderer())
+    char_w  = max(1, round(bb.width / 20))
+    line_h  = max(1, round(bb.height * 1.4))   # add ~40% leading
+    plt.close(fig)
+    return char_w, line_h
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -44,18 +57,18 @@ BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
 # Style constants  (mirrors the reference trajectory visualiser)
 # ---------------------------------------------------------------------------
 WRAP       = 60
-FONT_SIZE  = 9
+FONT_SIZE  = 14
 BG         = 'white'
 PANBG      = '#f5f5f5'
 TXTCLR     = '#222222'
 BORDERS    = ['#0077b6', '#023e8a']
 
 # Character-grid coordinate space for pymovements
-CHAR_SCALE  = 14    # "pixels" per char unit  (arbitrary; sets spatial resolution)
+CHAR_SCALE, LINE_SCALE = _measure_char_dims(FONT_SIZE)  # width / line-height in px
 N_TOTAL     = 8000  # total weighted gaze samples per panel
-JITTER_STD  = 1.8   # Gaussian position jitter (char units) for smooth interpolation
+JITTER_STD  = 1  # Gaussian position jitter (char units) for smooth interpolation
 
-RANDOM_SEED = None  # set to int for reproducible pair selection
+RANDOM_SEED = 35  # set to int for reproducible pair selection
 EXCLUDE_BAD_WORKERS = True   # set False to include all workers
 _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
@@ -195,7 +208,7 @@ def render_text_background(display_lines: list[str], n_lines: int,
     text characters align with their heatmap positions.
     """
     fig_w = WRAP * CHAR_SCALE / dpi        # exact pixel match in x
-    fig_h = n_lines * CHAR_SCALE / dpi     # exact pixel match in y
+    fig_h = n_lines * LINE_SCALE / dpi    # exact pixel match in y
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=BG)
     ax.set_facecolor(BG)
     ax.set_xlim(0, WRAP)
@@ -214,7 +227,9 @@ def render_text_background(display_lines: list[str], n_lines: int,
 # Build weighted gaze point cloud from average histogram
 # ---------------------------------------------------------------------------
 def make_gaze_object(text: str, c2p: dict, avg_probs: np.ndarray,
-                     n_lines: int, rng: np.random.Generator) -> pm.Gaze:
+                     n_lines: int, rng: np.random.Generator,
+                     jitter_x: float = JITTER_STD,
+                     jitter_y: float = JITTER_STD) -> pm.Gaze:
     """
     Convert average 1-D histogram to a 2-D weighted gaze point cloud and wrap
     it in a pm.Gaze object in the character-grid pixel coordinate space.
@@ -230,17 +245,17 @@ def make_gaze_object(text: str, c2p: dict, avg_probs: np.ndarray,
         if n_samp == 0:
             continue
         x_base = col * CHAR_SCALE + CHAR_SCALE // 2
-        y_base = ln  * CHAR_SCALE + CHAR_SCALE // 2
-        xs_list.append(rng.normal(x_base, JITTER_STD, n_samp))
-        ys_list.append(rng.normal(y_base, JITTER_STD, n_samp))
+        y_base = ln  * LINE_SCALE + LINE_SCALE // 2
+        xs_list.append(rng.normal(x_base, jitter_x, n_samp))
+        ys_list.append(rng.normal(y_base, jitter_y, n_samp))
 
     xs = np.clip(np.concatenate(xs_list), 0, WRAP * CHAR_SCALE - 1)
-    ys = np.clip(np.concatenate(ys_list), 0, n_lines * CHAR_SCALE - 1)
+    ys = np.clip(np.concatenate(ys_list), 0, n_lines * LINE_SCALE - 1)
 
     df = pl.DataFrame({'x_pix': xs.tolist(), 'y_pix': ys.tolist()})
     exp = pm.Experiment(
         screen_width_px=WRAP * CHAR_SCALE,
-        screen_height_px=n_lines * CHAR_SCALE,
+        screen_height_px=n_lines * LINE_SCALE,
         screen_width_cm=40, screen_height_cm=30,
         distance_cm=60,
         origin='upper left',
@@ -289,6 +304,18 @@ screen_h = n_lines * CHAR_SCALE
 heat_h   = max(n_lines * 0.22, 6)   # inches
 fig_h    = heat_h + 0.5
 
+# Anisotropic jitter: scale per-axis so Gaussian spread is isotropic in display space.
+# Each panel occupies fig_width * col_frac inches wide and fig_h * row_frac inches tall.
+# GridSpec: left=0.03, right=0.97, wspace=0.06 (fraction of avg col width), 2 cols
+# → col_width_frac = 0.94 / (2 + 0.06); GridSpec: top=0.97, bottom=0.05 → row_frac=0.92
+_ax_w_in   = 18 * 0.94 / (2 + 0.06)
+_ax_h_in   = fig_h * 0.92
+_char_w_in = _ax_w_in / WRAP          # display inches per character column
+_char_h_in = _ax_h_in / n_lines       # display inches per text line
+# Normalise to y; shrink x jitter when characters appear wider than tall
+jitter_x = JITTER_STD * (_char_h_in / _char_w_in)
+jitter_y = JITTER_STD
+
 rng = np.random.default_rng(RANDOM_SEED)
 
 # ---------------------------------------------------------------------------
@@ -303,8 +330,8 @@ render_text_background(display_lines2, n_lines, bg_path2)
 # ---------------------------------------------------------------------------
 # Build pm.Gaze objects
 # ---------------------------------------------------------------------------
-gaze_left  = make_gaze_object(text1, c2p1, avg_left,  n_lines, rng)
-gaze_right = make_gaze_object(text2, c2p2, avg_right, n_lines, rng)
+gaze_left  = make_gaze_object(text1, c2p1, avg_left,  n_lines, rng, jitter_x, jitter_y)
+gaze_right = make_gaze_object(text2, c2p2, avg_right, n_lines, rng, jitter_x, jitter_y)
 
 # ---------------------------------------------------------------------------
 # Assemble figure
