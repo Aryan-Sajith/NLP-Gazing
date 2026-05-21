@@ -287,8 +287,7 @@ screen_h = n_lines * CHAR_SCALE
 # Figure height: heatmap panel height is proportional to text line count;
 # bar chart row is fixed.
 heat_h   = max(n_lines * 0.22, 6)   # inches
-bar_h    = 2.8                        # inches
-fig_h    = heat_h + bar_h + 1.2
+fig_h    = heat_h + 0.5
 
 rng = np.random.default_rng(RANDOM_SEED)
 
@@ -311,29 +310,21 @@ gaze_right = make_gaze_object(text2, c2p2, avg_right, n_lines, rng)
 # Assemble figure
 # ---------------------------------------------------------------------------
 fig = plt.figure(figsize=(18, fig_h), facecolor=BG)
-fig.suptitle(
-    f'Interpolated {MODALITY.capitalize()} Heatmap  (pymovements)  —  {LENGTH_CATEGORY.capitalize()} Response Length  ·  '
-    f'{SRC_LEFT}  |  {SRC_RIGHT}\n'
-    f'{len(medium_left)} left samples  /  {len(medium_right)} right samples',
-    color='black', fontsize=12, fontweight='bold', y=1.0,
-)
 
 gs = gridspec.GridSpec(
-    2, 2, figure=fig,
-    left=0.03, right=0.97, top=0.94, bottom=0.05,
-    hspace=0.22, wspace=0.06,
-    height_ratios=[heat_h, bar_h],
+    1, 2, figure=fig,
+    left=0.03, right=0.97, top=0.97, bottom=0.05,
+    wspace=0.06,
 )
 
 ax_heat_left  = fig.add_subplot(gs[0, 0])
 ax_heat_right = fig.add_subplot(gs[0, 1])
-ax_hist_left  = fig.add_subplot(gs[1, 0])
-ax_hist_right = fig.add_subplot(gs[1, 1])
 
 # ── pymovements heatmaps ────────────────────────────────────────────────────
 short1 = text1[:60].replace('\n', ' ')
 short2 = text2[:60].replace('\n', ' ')
 
+axes_before_left = {id(a) for a in fig.axes}
 pm.plotting.heatmap(
     gaze=gaze_left,
     position_column='pixel',
@@ -354,7 +345,9 @@ pm.plotting.heatmap(
     alpha=0.70,
     ax=ax_heat_left,
 )
+cbar_left = next((a for a in fig.axes if id(a) not in axes_before_left), None)
 
+axes_before_right = {id(a) for a in fig.axes}
 pm.plotting.heatmap(
     gaze=gaze_right,
     position_column='pixel',
@@ -375,9 +368,11 @@ pm.plotting.heatmap(
     alpha=0.70,
     ax=ax_heat_right,
 )
+cbar_right = next((a for a in fig.axes if id(a) not in axes_before_right), None)
 
 # Style heatmap panel borders to match the reference visual
 for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
+    # ax.set_aspect('auto')
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(2.0)
     ax.tick_params(colors='black', labelsize=7)
@@ -385,9 +380,13 @@ for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
     ax.xaxis.label.set_color('black')
     ax.yaxis.label.set_color('black')
 
-# ── Average histogram bar charts ────────────────────────────────────────────
-draw_hist_panel(ax_hist_left,  avg_left,  BORDERS[0], SRC_LEFT,  len(medium_left))
-draw_hist_panel(ax_hist_right, avg_right, BORDERS[1], SRC_RIGHT, len(medium_right))
+# Snap colorbar height to exactly match each heatmap axes
+fig.canvas.draw()
+for ax_heat, cbar_ax in [(ax_heat_left, cbar_left), (ax_heat_right, cbar_right)]:
+    if cbar_ax is not None:
+        hp = ax_heat.get_position()
+        cp = cbar_ax.get_position()
+        cbar_ax.set_position([cp.x0, hp.y0, cp.width, hp.height])
 
 plt.savefig(OUTPUT_PATH, dpi=150, bbox_inches='tight', facecolor=BG)
 plt.close(fig)
