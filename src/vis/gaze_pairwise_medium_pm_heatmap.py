@@ -68,7 +68,7 @@ CHAR_SCALE, LINE_SCALE = _measure_char_dims(FONT_SIZE)  # width / line-height in
 N_TOTAL     = 8000  # total weighted gaze samples per panel
 JITTER_STD  = 1  # Gaussian position jitter (char units) for smooth interpolation
 
-RANDOM_SEED = 35  # set to int for reproducible pair selection
+RANDOM_SEED = 81  # set to int for reproducible pair selection
 EXCLUDE_BAD_WORKERS = True   # set False to include all workers
 _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
@@ -361,7 +361,7 @@ pm.plotting.heatmap(
     origin='upper',
     show_cbar=True,
     cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_LEFT}]  query {query_id}  ·  {ts}\n'
+    title=(f'[{SRC_LEFT}]\n'
            f'"{short1}…"  ·  {len(text1)} chars'),
     xlabel='Character column',
     ylabel='Text line',
@@ -384,7 +384,7 @@ pm.plotting.heatmap(
     origin='upper',
     show_cbar=True,
     cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_RIGHT}]  query {query_id}  ·  {ts}\n'
+    title=(f'[{SRC_RIGHT}]\n'
            f'"{short2}…"  ·  {len(text2)} chars'),
     xlabel='Character column',
     ylabel='Text line',
