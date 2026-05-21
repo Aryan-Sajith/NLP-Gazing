@@ -33,6 +33,8 @@ EXCLUDE_BAD_WORKERS = True   # set False to include all workers
 _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 N_GROUPS = 2        # number of shape-similarity groups for centroid/sample plots
 MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
+# Manual overrides: cluster 1-indexed label -> group 0-indexed.  e.g. {4: 1} moves C4 to Group 2.
+CENTROID_GROUP_OVERRIDES: dict = {4: 1}
 
 # histogram needs a lower k to avoid tiny outlier clusters; time_interp handles k=10 fine
 N_CLUSTERS = 6 if DATA_TYPE == "histogram" else 10
@@ -117,6 +119,11 @@ _n_groups = min(N_GROUPS, len(_valid_idxs))   # can't have more groups than vali
 _centroid_group_labels = KMeans(
     n_clusters=_n_groups, random_state=RANDOM_STATE, n_init=10
 ).fit_predict(centroids[_valid_idxs])
+
+for _c1idx, _tgt_grp in CENTROID_GROUP_OVERRIDES.items():
+    _pos = np.where(_valid_idxs == _c1idx - 1)[0]
+    if len(_pos):
+        _centroid_group_labels[_pos[0]] = _tgt_grp
 
 _sharey = DATA_TYPE == "time_interp"   # histogram groups have very different y ranges
 fig1, axes1 = plt.subplots(1, _n_groups, figsize=(6 * _n_groups, 5),

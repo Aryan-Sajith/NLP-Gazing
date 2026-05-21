@@ -36,7 +36,10 @@ GAZE_PATH     = os.path.join(_DATA_DIR, f"user_gazing_time_interp_{_qc}.csv")
 MOUSE_PATH    = os.path.join(_DATA_DIR, f"user_mouse_time_interp_{_qc}.csv")
 PER_QUERY_OUT = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_per_query_{_qc}.csv")
 SUMMARY_OUT   = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_summary_{_qc}.csv")
-PLOT_OUT      = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_{_qc}.png")
+PLOT_OVERALL   = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_overall_{_qc}.png")
+PLOT_BY_LENGTH = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_by_length_{_qc}.png")
+PLOT_BY_SIDE   = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_by_side_{_qc}.png")
+PLOT_PER_USER  = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_per_user_{_qc}.png")
 
 N_POINTS = 100
 POS_COLS = [f"pos_{i}" for i in range(N_POINTS)]
@@ -175,10 +178,8 @@ SIDE_STYLES = {
     "pairwise_right": {"color": "tab:green",  "ls": "-."},
 }
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-
-# Top-left: overall histogram of Pearson r
-ax = axes[0, 0]
+# Overall histogram of Pearson r
+fig, ax = plt.subplots(figsize=(7, 5))
 ax.hist(results_df["pearson_r"], bins=40, color="steelblue", edgecolor="black", alpha=0.85)
 ax.axvline(0, color="gray", lw=0.8, ls="--")
 ax.axvline(results_df["pearson_r"].mean(), color="red", lw=1.6,
@@ -188,9 +189,13 @@ ax.set_ylabel("Number of queries")
 ax.set_title(f"Overall distribution  (n = {len(results_df)})")
 ax.set_xlim(-1, 1)
 ax.legend()
+fig.tight_layout()
+fig.savefig(PLOT_OVERALL, dpi=150)
+plt.close(fig)
+print(f"Saved overall plot to {PLOT_OVERALL}")
 
-# Top-right: KDE by length category
-ax = axes[0, 1]
+# KDE by length category
+fig, ax = plt.subplots(figsize=(7, 5))
 for cat, style in LEN_STYLES.items():
     vals = results_df[results_df["length_category"] == cat]["pearson_r"].values
     _kde_curve(ax, vals, cat, **style)
@@ -200,9 +205,13 @@ ax.set_ylabel("Density")
 ax.set_title("By response length category")
 ax.set_xlim(-1, 1)
 ax.legend()
+fig.tight_layout()
+fig.savefig(PLOT_BY_LENGTH, dpi=150)
+plt.close(fig)
+print(f"Saved by-length plot to {PLOT_BY_LENGTH}")
 
-# Bottom-left: KDE by side / task type
-ax = axes[1, 0]
+# KDE by side / task type
+fig, ax = plt.subplots(figsize=(7, 5))
 for side, style in SIDE_STYLES.items():
     vals = results_df[results_df["side"] == side]["pearson_r"].values
     _kde_curve(ax, vals, side, **style)
@@ -212,9 +221,13 @@ ax.set_ylabel("Density")
 ax.set_title("By task type (side)")
 ax.set_xlim(-1, 1)
 ax.legend()
+fig.tight_layout()
+fig.savefig(PLOT_BY_SIDE, dpi=150)
+plt.close(fig)
+print(f"Saved by-side plot to {PLOT_BY_SIDE}")
 
-# Bottom-right: histogram of per-user mean Pearson r (diversity)
-ax = axes[1, 1]
+# Histogram of per-user mean Pearson r (diversity)
+fig, ax = plt.subplots(figsize=(7, 5))
 per_user_means = results_df.groupby("user_id")["pearson_r"].mean()
 ax.hist(per_user_means, bins=25, color="seagreen", edgecolor="black", alpha=0.85)
 ax.axvline(0, color="gray", lw=0.8, ls="--")
@@ -225,8 +238,7 @@ ax.set_ylabel("Number of users")
 ax.set_title(f"Per-user diversity  ({len(per_user_means)} users)")
 ax.set_xlim(-1, 1)
 ax.legend()
-
-fig.suptitle("Gaze vs Mouse correlation — relative position over normalized time", fontsize=13)
 fig.tight_layout()
-fig.savefig(PLOT_OUT, dpi=150)
-print(f"Saved visualization to {PLOT_OUT}")
+fig.savefig(PLOT_PER_USER, dpi=150)
+plt.close(fig)
+print(f"Saved per-user plot to {PLOT_PER_USER}")
