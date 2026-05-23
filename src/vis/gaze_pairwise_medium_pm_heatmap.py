@@ -342,16 +342,17 @@ gaze_right = make_gaze_object(text2, c2p2, avg_right, n_lines, rng, jitter_x, ji
 fig = plt.figure(figsize=(18, fig_h), facecolor=BG)
 
 gs = gridspec.GridSpec(
-    1, 2, figure=fig,
+    1, 3, figure=fig,
     left=0.03, right=0.97, top=0.97, bottom=0.05,
-    wspace=0.06,
+    wspace=0.04,
+    width_ratios=[1, 0.05, 1],
 )
 
 ax_heat_left  = fig.add_subplot(gs[0, 0])
-ax_heat_right = fig.add_subplot(gs[0, 1])
+ax_cbar       = fig.add_subplot(gs[0, 1])
+ax_heat_right = fig.add_subplot(gs[0, 2])
 
-# ── pymovements heatmaps ────────────────────────────────────────────────────
-axes_before_left = {id(a) for a in fig.axes}
+# ── pymovements heatmaps (colorbars disabled; shared scale added manually) ──
 pm.plotting.heatmap(
     gaze=gaze_left,
     position_column='pixel',
@@ -359,8 +360,7 @@ pm.plotting.heatmap(
     cmap='jet',
     interpolation='gaussian',
     origin='upper',
-    show_cbar=True,
-    cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
+    show_cbar=False,
     title='',
     xlabel='Character column',
     ylabel='Text line',
@@ -371,9 +371,7 @@ pm.plotting.heatmap(
     alpha=0.70,
     ax=ax_heat_left,
 )
-cbar_left = next((a for a in fig.axes if id(a) not in axes_before_left), None)
 
-axes_before_right = {id(a) for a in fig.axes}
 pm.plotting.heatmap(
     gaze=gaze_right,
     position_column='pixel',
@@ -381,8 +379,7 @@ pm.plotting.heatmap(
     cmap='jet',
     interpolation='gaussian',
     origin='upper',
-    show_cbar=True,
-    cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
+    show_cbar=False,
     title='',
     xlabel='Character column',
     ylabel='Text line',
@@ -393,11 +390,17 @@ pm.plotting.heatmap(
     alpha=0.70,
     ax=ax_heat_right,
 )
-cbar_right = next((a for a in fig.axes if id(a) not in axes_before_right), None)
 
-# Style heatmap panel borders to match the reference visual
+# Shared colour scale: heatmap image is the last imshow artist in each axes
+img_left  = ax_heat_left.get_images()[-1]
+img_right = ax_heat_right.get_images()[-1]
+shared_vmax = max(float(img_left.get_array().max()),
+                  float(img_right.get_array().max()))
+for img in (img_left, img_right):
+    img.set_clim(0, shared_vmax)
+
+# Style heatmap panel borders
 for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
-    # ax.set_aspect('auto')
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(2.0)
     ax.tick_params(colors='black', labelsize=12)
@@ -406,18 +409,16 @@ for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
     ax.xaxis.label.set_fontsize(14)
     ax.yaxis.label.set_fontsize(14)
 
-for _cb in (cbar_left, cbar_right):
-    if _cb is not None:
-        _cb.tick_params(labelsize=12)
-        _cb.yaxis.label.set_fontsize(13)
+# Single shared colorbar in the centre column
+cbar = fig.colorbar(img_right, cax=ax_cbar)
+cbar.ax.yaxis.set_label_position('left')
+cbar.set_label(f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})', fontsize=13, labelpad=6)
+cbar.ax.tick_params(labelsize=12)
 
-# Snap colorbar height to exactly match each heatmap axes
+# Nudge colorbar slightly left so it sits visually centred between the panels
 fig.canvas.draw()
-for ax_heat, cbar_ax in [(ax_heat_left, cbar_left), (ax_heat_right, cbar_right)]:
-    if cbar_ax is not None:
-        hp = ax_heat.get_position()
-        cp = cbar_ax.get_position()
-        cbar_ax.set_position([cp.x0, hp.y0, cp.width, hp.height])
+_pos = ax_cbar.get_position()
+ax_cbar.set_position([_pos.x0 - 0.01, _pos.y0, _pos.width, _pos.height])
 
 plt.savefig(OUTPUT_PATH, dpi=150, bbox_inches='tight', facecolor=BG)
 plt.close(fig)
