@@ -13,6 +13,7 @@ output/user_gazing_time_interp.csv and output/user_mouse_time_interp.csv.
 
 import os
 import glob
+import shutil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -32,10 +33,12 @@ _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 USER_BEHAVIOR_DIR = os.path.join(PROJECT_ROOT, "user_behavior")
 QUERY_LOGS_PATH   = os.path.join(PROJECT_ROOT, "query_logs_table.csv")
-_DATA_DIR = os.path.join(PROJECT_ROOT, "output", "data")
-_POS_DIR  = os.path.join(PROJECT_ROOT, "output", "position")
-os.makedirs(_DATA_DIR, exist_ok=True)
-os.makedirs(_POS_DIR,  exist_ok=True)
+_DATA_DIR        = os.path.join(PROJECT_ROOT, "output", "data")
+_POS_DIR         = os.path.join(PROJECT_ROOT, "output", "position")
+_MAIN_PAPER_DIR  = os.path.join(PROJECT_ROOT, "output", "main_paper_images")
+os.makedirs(_DATA_DIR,       exist_ok=True)
+os.makedirs(_POS_DIR,        exist_ok=True)
+os.makedirs(_MAIN_PAPER_DIR, exist_ok=True)
 GAZE_OUTPUT_PATH  = os.path.join(_DATA_DIR, f"user_gazing_time_interp_{_qc}.csv")
 MOUSE_OUTPUT_PATH = os.path.join(_DATA_DIR, f"user_mouse_time_interp_{_qc}.csv")
 GAZE_PLOT_PATH        = os.path.join(_POS_DIR, f"gaze_position_time_interp_{_qc}.png")
@@ -214,11 +217,11 @@ def plot_avg_curves(df, prefix, suptitle, save_path):
             continue
         avg_pos = subset[POS_COLS].mean().values
         ax.plot(INTERP_TIMES, avg_pos, label=f"{label} (n={len(subset)})", **style)
-    ax.set_xlabel("Normalized time")
-    ax.set_ylabel("Average relative position")
+    ax.set_xlabel("Normalized time", fontsize=14)
+    ax.set_ylabel("Average relative position", fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
     ax.set_xlim(0, 1)
-    ax.legend()
-    ax.set_title(suptitle, fontsize=13)
+    ax.legend(fontsize=13)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     plt.show()
@@ -233,11 +236,11 @@ def plot_length_category_curves(df, suptitle, save_path):
             continue
         avg_pos = subset[POS_COLS].mean().values
         ax.plot(INTERP_TIMES, avg_pos, label=f"{cat} (n={len(subset)})", **style)
-    ax.set_xlabel("Normalized time")
-    ax.set_ylabel("Average relative position")
+    ax.set_xlabel("Normalized time", fontsize=14)
+    ax.set_ylabel("Average relative position", fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
     ax.set_xlim(0, 1)
-    ax.legend()
-    ax.set_title(suptitle, fontsize=13)
+    ax.legend(fontsize=13)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     plt.show()
@@ -256,3 +259,6 @@ plot_length_category_curves(
 plot_length_category_curves(
     mouse_df, "Mouse position curves by response length category", MOUSE_LEN_PLOT_PATH
 )
+
+for _p in (GAZE_PLOT_PATH, GAZE_LEN_PLOT_PATH):
+    shutil.copy(_p, _MAIN_PAPER_DIR)

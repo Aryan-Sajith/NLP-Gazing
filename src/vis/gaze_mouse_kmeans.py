@@ -13,6 +13,7 @@ The 6 cluster centroids are plotted as bar charts in a single 2x3 figure.
 """
 
 import os
+import shutil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -44,9 +45,11 @@ N_CLUSTERS = 6 if DATA_TYPE == "histogram" else 10
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-_DATA_DIR   = os.path.join(PROJECT_ROOT, "output", "data")
-_KMEANS_DIR = os.path.join(PROJECT_ROOT, "output", "kmeans")
-os.makedirs(_KMEANS_DIR, exist_ok=True)
+_DATA_DIR       = os.path.join(PROJECT_ROOT, "output", "data")
+_KMEANS_DIR     = os.path.join(PROJECT_ROOT, "output", "kmeans")
+_MAIN_PAPER_DIR = os.path.join(PROJECT_ROOT, "output", "main_paper_images")
+os.makedirs(_KMEANS_DIR,     exist_ok=True)
+os.makedirs(_MAIN_PAPER_DIR, exist_ok=True)
 
 if DATA_TYPE == "time_interp":
     _modality_stem = "gazing" if MODALITY == "gaze" else "mouse"
@@ -96,13 +99,14 @@ CLUSTER_COLORS = [_cmap(i / max(N_CLUSTERS - 1, 1)) for i in range(N_CLUSTERS)]
 
 def _ax_labels(ax):
     if DATA_TYPE == "time_interp":
-        ax.set_xlabel("Normalized time")
-        ax.set_ylabel("Average relative position\n(centre_idx / response_length)")
+        ax.set_xlabel("Normalized time", fontsize=14)
+        ax.set_ylabel("Average relative position", fontsize=14)
         ax.set_ylim(0, 1)
     else:
-        ax.set_xlabel("Relative position\n(centre_idx / response_length)")
-        ax.set_ylabel("Average probability")
+        ax.set_xlabel("Relative position", fontsize=14)
+        ax.set_ylabel("Average probability", fontsize=14)
         ax.set_ylim(bottom=0)   # auto-scale top; histogram probs are ~0–0.05
+    ax.tick_params(axis='both', labelsize=12)
     ax.set_xlim(0, 1)
 
 
@@ -135,15 +139,11 @@ for g, ax in enumerate(axes1):
         ax.plot(BIN_CENTERS, centroids[idx], color=CLUSTER_COLORS[idx], lw=1.5,
                 label=f"C{idx + 1} (n={cluster_counts[idx]})")
     _ax_labels(ax)
-    ax.legend(fontsize=8)
-    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=10)
+    ax.legend(fontsize=13)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=14)
 
-fig1.suptitle(
-    f"BisectingKMeans (k={N_CLUSTERS}, largest_cluster) — {SOURCE_LABEL}  "
-    f"(total n={len(subset)}, excluding clusters n<{MIN_CLUSTER_SAMPLES})",
-    fontsize=11,
-)
 fig1.savefig(OUTPUT_PATH, dpi=150)
+shutil.copy(OUTPUT_PATH, _MAIN_PAPER_DIR)
 print(f"Saved centroids plot to {OUTPUT_PATH}")
 
 # ---------------------------------------------------------------------------
@@ -167,14 +167,11 @@ for g, ax in enumerate(axes2):
         ax.plot(BIN_CENTERS, sample_rows[idx], color=CLUSTER_COLORS[idx], lw=1.2, alpha=0.75,
                 label=f"Sample {idx + 1} (row {row_i})")
     _ax_labels(ax)
-    ax.legend(fontsize=8)
-    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=10)
+    ax.legend(fontsize=13)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=14)
 
-fig2.suptitle(
-    f"Random samples (n={N_CLUSTERS}) — {SOURCE_LABEL}  (total n={len(subset)})",
-    fontsize=11,
-)
 fig2.savefig(OUTPUT_PATH_SAMPLE, dpi=150)
+shutil.copy(OUTPUT_PATH_SAMPLE, _MAIN_PAPER_DIR)
 print(f"Saved samples plot to {OUTPUT_PATH_SAMPLE}")
 
 # ---------------------------------------------------------------------------

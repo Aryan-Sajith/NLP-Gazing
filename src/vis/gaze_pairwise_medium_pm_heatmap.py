@@ -18,6 +18,7 @@ Layout
 import os
 import csv
 import random
+import shutil
 from worker_filter import BAD_WORKERS
 import tempfile
 import numpy as np
@@ -85,9 +86,11 @@ assert MODALITY in ('gaze', 'mouse'), \
     f"MODALITY must be 'gaze' or 'mouse', got '{MODALITY}'"
 
 # Derived from MODALITY
-_DATA_DIR  = os.path.join(PROJECT_ROOT, "output", "data")
-_HEAT_DIR  = os.path.join(PROJECT_ROOT, "output", "heatmap")
-os.makedirs(_HEAT_DIR, exist_ok=True)
+_DATA_DIR       = os.path.join(PROJECT_ROOT, "output", "data")
+_HEAT_DIR       = os.path.join(PROJECT_ROOT, "output", "heatmap")
+_MAIN_PAPER_DIR = os.path.join(PROJECT_ROOT, "output", "main_paper_images")
+os.makedirs(_HEAT_DIR,       exist_ok=True)
+os.makedirs(_MAIN_PAPER_DIR, exist_ok=True)
 _HIST_FILE = f'user_gazing_hist_{_qc}.csv' if MODALITY == 'gaze' else f'user_mouse_hist_{_qc}.csv'
 HIST_PATH  = os.path.join(_DATA_DIR, _HIST_FILE)
 SRC_LEFT   = f'{MODALITY}_pairwise_left'
@@ -348,9 +351,6 @@ ax_heat_left  = fig.add_subplot(gs[0, 0])
 ax_heat_right = fig.add_subplot(gs[0, 1])
 
 # ── pymovements heatmaps ────────────────────────────────────────────────────
-short1 = text1[:60].replace('\n', ' ')
-short2 = text2[:60].replace('\n', ' ')
-
 axes_before_left = {id(a) for a in fig.axes}
 pm.plotting.heatmap(
     gaze=gaze_left,
@@ -361,8 +361,7 @@ pm.plotting.heatmap(
     origin='upper',
     show_cbar=True,
     cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_LEFT}]\n'
-           f'"{short1}…"  ·  {len(text1)} chars'),
+    title='',
     xlabel='Character column',
     ylabel='Text line',
     show=False,
@@ -384,8 +383,7 @@ pm.plotting.heatmap(
     origin='upper',
     show_cbar=True,
     cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_RIGHT}]\n'
-           f'"{short2}…"  ·  {len(text2)} chars'),
+    title='',
     xlabel='Character column',
     ylabel='Text line',
     show=False,
@@ -402,10 +400,16 @@ for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
     # ax.set_aspect('auto')
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(2.0)
-    ax.tick_params(colors='black', labelsize=7)
-    ax.title.set_color('black')
+    ax.tick_params(colors='black', labelsize=12)
     ax.xaxis.label.set_color('black')
     ax.yaxis.label.set_color('black')
+    ax.xaxis.label.set_fontsize(14)
+    ax.yaxis.label.set_fontsize(14)
+
+for _cb in (cbar_left, cbar_right):
+    if _cb is not None:
+        _cb.tick_params(labelsize=12)
+        _cb.yaxis.label.set_fontsize(13)
 
 # Snap colorbar height to exactly match each heatmap axes
 fig.canvas.draw()
@@ -417,9 +421,9 @@ for ax_heat, cbar_ax in [(ax_heat_left, cbar_left), (ax_heat_right, cbar_right)]
 
 plt.savefig(OUTPUT_PATH, dpi=150, bbox_inches='tight', facecolor=BG)
 plt.close(fig)
+shutil.copy(OUTPUT_PATH, _MAIN_PAPER_DIR)
 
 # Clean up temp files
-import shutil
 shutil.rmtree(tmp_dir, ignore_errors=True)
 
 print(f'Saved → {OUTPUT_PATH}')

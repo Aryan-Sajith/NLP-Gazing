@@ -13,6 +13,7 @@ Outputs:
 """
 
 import os
+import shutil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -29,9 +30,11 @@ _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_DATA_DIR  = os.path.join(PROJECT_ROOT, "output", "data")
-_CORR_DIR  = os.path.join(PROJECT_ROOT, "output", "correlation")
-os.makedirs(_CORR_DIR, exist_ok=True)
+_DATA_DIR        = os.path.join(PROJECT_ROOT, "output", "data")
+_CORR_DIR        = os.path.join(PROJECT_ROOT, "output", "correlation")
+_MAIN_PAPER_DIR  = os.path.join(PROJECT_ROOT, "output", "main_paper_images")
+os.makedirs(_CORR_DIR,       exist_ok=True)
+os.makedirs(_MAIN_PAPER_DIR, exist_ok=True)
 GAZE_PATH     = os.path.join(_DATA_DIR, f"user_gazing_time_interp_{_qc}.csv")
 MOUSE_PATH    = os.path.join(_DATA_DIR, f"user_mouse_time_interp_{_qc}.csv")
 PER_QUERY_OUT = os.path.join(_CORR_DIR, f"gaze_mouse_correlation_per_query_{_qc}.csv")
@@ -184,11 +187,11 @@ ax.hist(results_df["pearson_r"], bins=40, color="steelblue", edgecolor="black", 
 ax.axvline(0, color="gray", lw=0.8, ls="--")
 ax.axvline(results_df["pearson_r"].mean(), color="red", lw=1.6,
            label=f"mean = {results_df['pearson_r'].mean():.3f}")
-ax.set_xlabel("Pearson r  (gaze vs mouse position-over-time)")
-ax.set_ylabel("Number of queries")
-ax.set_title(f"Overall distribution  (n = {len(results_df)})")
+ax.set_xlabel("Pearson r  (gaze vs mouse position-over-time)", fontsize=14)
+ax.set_ylabel("Number of queries", fontsize=14)
+ax.tick_params(axis='both', labelsize=12)
 ax.set_xlim(-1, 1)
-ax.legend()
+ax.legend(fontsize=13)
 fig.tight_layout()
 fig.savefig(PLOT_OVERALL, dpi=150)
 plt.close(fig)
@@ -200,14 +203,15 @@ for cat, style in LEN_STYLES.items():
     vals = results_df[results_df["length_category"] == cat]["pearson_r"].values
     _kde_curve(ax, vals, cat, **style)
 ax.axvline(0, color="gray", lw=0.8, ls="--")
-ax.set_xlabel("Pearson r")
-ax.set_ylabel("Density")
-ax.set_title("By response length category")
+ax.set_xlabel("Pearson r", fontsize=14)
+ax.set_ylabel("Density", fontsize=14)
+ax.tick_params(axis='both', labelsize=12)
 ax.set_xlim(-1, 1)
-ax.legend()
+ax.legend(fontsize=13)
 fig.tight_layout()
 fig.savefig(PLOT_BY_LENGTH, dpi=150)
 plt.close(fig)
+shutil.copy(PLOT_BY_LENGTH, _MAIN_PAPER_DIR)
 print(f"Saved by-length plot to {PLOT_BY_LENGTH}")
 
 # KDE by side / task type
@@ -216,11 +220,11 @@ for side, style in SIDE_STYLES.items():
     vals = results_df[results_df["side"] == side]["pearson_r"].values
     _kde_curve(ax, vals, side, **style)
 ax.axvline(0, color="gray", lw=0.8, ls="--")
-ax.set_xlabel("Pearson r")
-ax.set_ylabel("Density")
-ax.set_title("By task type (side)")
+ax.set_xlabel("Pearson r", fontsize=14)
+ax.set_ylabel("Density", fontsize=14)
+ax.tick_params(axis='both', labelsize=12)
 ax.set_xlim(-1, 1)
-ax.legend()
+ax.legend(fontsize=13)
 fig.tight_layout()
 fig.savefig(PLOT_BY_SIDE, dpi=150)
 plt.close(fig)
@@ -233,11 +237,11 @@ ax.hist(per_user_means, bins=25, color="seagreen", edgecolor="black", alpha=0.85
 ax.axvline(0, color="gray", lw=0.8, ls="--")
 ax.axvline(per_user_means.mean(), color="red", lw=1.6,
            label=f"mean of means = {per_user_means.mean():.3f}")
-ax.set_xlabel("Per-user mean Pearson r")
-ax.set_ylabel("Number of users")
-ax.set_title(f"Per-user diversity  ({len(per_user_means)} users)")
+ax.set_xlabel("Per-user mean Pearson r", fontsize=14)
+ax.set_ylabel("Number of users", fontsize=14)
+ax.tick_params(axis='both', labelsize=12)
 ax.set_xlim(-1, 1)
-ax.legend()
+ax.legend(fontsize=13)
 fig.tight_layout()
 fig.savefig(PLOT_PER_USER, dpi=150)
 plt.close(fig)
