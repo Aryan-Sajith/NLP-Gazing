@@ -76,7 +76,7 @@ _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 # ---------------------------------------------------------------------------
 # *** Hyperparameters ***
 # ---------------------------------------------------------------------------
-LENGTH_CATEGORY = 'medium'   # one of: 'short' | 'medium' | 'long'
+LENGTH_CATEGORY = 'long'   # one of: 'short' | 'medium' | 'long'
 MODALITY        = 'mouse'     # one of: 'gaze'  | 'mouse'
 # ---------------------------------------------------------------------------
 

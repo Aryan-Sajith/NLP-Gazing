@@ -25,9 +25,9 @@ from worker_filter import BAD_WORKERS
 # Hyperparameters
 # ---------------------------------------------------------------------------
 MODALITY  = "gaze"        # "gaze" or "mouse"
-SIDE      = "left"        # "left" or "right"
-# DATA_TYPE = "histogram"    # "histogram" or "time_interp"
-DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
+SIDE      = "right"        # "left" or "right"
+DATA_TYPE = "histogram"    # "histogram" or "time_interp"
+# DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 
 RANDOM_STATE = 42
 EXCLUDE_BAD_WORKERS = True   # set False to include all workers
