@@ -197,8 +197,19 @@ class PhaseFeatureExtractor:
         reviewing_ends = [p['reviewing_end'] for p in all_phases.values()]
         composing_starts = [p['composing_start'] for p in all_phases.values()]
         composing_ends = [p['composing_end'] for p in all_phases.values()]
-        
-        boundary_time = max(reviewing_ends)  # End of reviewing = start of composing
+
+        # Boundary = the actual last time the user was looking at any response text.
+        # We can't use max(reviewing_ends) here because stage_detector extends the last
+        # query's reviewing_end to file_end, which would always make composing duration 0.
+        # Composing in pairwise = deliberation time after the user finished reading.
+        valid_readings = merged_data[
+            (merged_data['centre_idx'].notna()) &
+            (merged_data['centre_idx'] != -1)
+        ]
+        if len(valid_readings) > 0:
+            boundary_time = valid_readings['rel_ts'].max()
+        else:
+            boundary_time = max(reviewing_ends)
         
         total_duration_s = (merged_data['rel_ts'].max() - merged_data['rel_ts'].min()) / 1000
         reviewing_duration_s = (boundary_time - merged_data['rel_ts'].min()) / 1000
@@ -333,8 +344,8 @@ class PhaseFeatureExtractor:
         features[f"{prefix}which_side_longer_reviewing"] = 1 if left_engaged > right_engaged else -1
         
         # Active ratio comparisons
-        left_active = left_features[f"{modality}_left_reviewing_active_ratio"]
-        right_active = right_features[f"{modality}_right_reviewing_active_ratio"]
+        left_active = left_features[f"{modality}_left_reviewing_active_time_ratio"]
+        right_active = right_features[f"{modality}_right_reviewing_active_time_ratio"]
         
         features[f"{prefix}reviewing_activity_ratio"] = self._safe_ratio(left_active, right_active)
         features[f"{prefix}reviewing_activity_diff"] = left_active - right_active
@@ -457,14 +468,15 @@ class PhaseFeatureExtractor:
         """Return empty feature dict for pairwise error cases."""
         features = {}
         
-        # Per-side features (left and right)
+        # Per-side features (left and right) — keys must match _extract_pairwise_side_features
         for side in ['left', 'right']:
             prefix = f"{modality}_{side}_"
             features.update({
                 f"{prefix}reviewing_engaged_time_s": 0,
                 f"{prefix}reviewing_engaged_pct": 0,
-                f"{prefix}reviewing_active_ratio": 0,
-                f"{prefix}reviewing_offscreen_ratio": 0,
+                f"{prefix}reviewing_active_time_ratio": 0,
+                f"{prefix}reviewing_onscreen_ratio": 0,
+                f"{prefix}reviewing_entries": 0,
                 f"{prefix}max_char_position_reached": 0,
                 f"{prefix}composing_lookback_time_s": 0,
                 f"{prefix}composing_lookback_ratio": 0
