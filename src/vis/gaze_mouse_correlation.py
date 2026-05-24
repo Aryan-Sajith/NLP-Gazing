@@ -198,7 +198,7 @@ plt.close(fig)
 print(f"Saved overall plot to {PLOT_OVERALL}")
 
 # KDE by length category
-fig, ax = plt.subplots(figsize=(7, 5))
+fig, ax = plt.subplots(figsize=(8, 5))
 for cat, style in LEN_STYLES.items():
     vals = results_df[results_df["length_category"] == cat]["pearson_r"].values
     _kde_curve(ax, vals, cat, **style)

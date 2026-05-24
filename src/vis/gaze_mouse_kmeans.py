@@ -25,9 +25,9 @@ from worker_filter import BAD_WORKERS
 # Hyperparameters
 # ---------------------------------------------------------------------------
 MODALITY  = "gaze"        # "gaze" or "mouse"
-SIDE      = "right"        # "left" or "right"
-DATA_TYPE = "histogram"    # "histogram" or "time_interp"
-# DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
+SIDE      = "left"        # "left" or "right"
+# DATA_TYPE = "histogram"    # "histogram" or "time_interp"
+DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 
 RANDOM_STATE = 42
 EXCLUDE_BAD_WORKERS = True   # set False to include all workers
@@ -36,6 +36,8 @@ N_GROUPS = 2        # number of shape-similarity groups for centroid/sample plot
 MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
 # Manual overrides: cluster 1-indexed label -> group 0-indexed.  e.g. {4: 1} moves C4 to Group 2.
 CENTROID_GROUP_OVERRIDES: dict = {4: 1}
+# Manual overrides for sample plot: sample 1-indexed label -> group 0-indexed.
+SAMPLE_GROUP_OVERRIDES: dict = {3: 0}
 
 # histogram needs a lower k to avoid tiny outlier clusters; time_interp handles k=10 fine
 N_CLUSTERS = 6 if DATA_TYPE == "histogram" else 10
@@ -140,7 +142,7 @@ for g, ax in enumerate(axes1):
                 label=f"C{idx + 1} (n={cluster_counts[idx]})")
     _ax_labels(ax)
     ax.legend(fontsize=13)
-    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=14)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=18)
 
 fig1.savefig(OUTPUT_PATH, dpi=150)
 shutil.copy(OUTPUT_PATH, _MAIN_PAPER_DIR)
@@ -158,6 +160,11 @@ _sample_group_labels = KMeans(
     n_clusters=_n_sample_groups, random_state=RANDOM_STATE, n_init=10
 ).fit_predict(sample_rows)
 
+for _s1idx, _tgt_grp in SAMPLE_GROUP_OVERRIDES.items():
+    _pos = _s1idx - 1
+    if 0 <= _pos < len(_sample_group_labels):
+        _sample_group_labels[_pos] = _tgt_grp
+
 fig2, axes2 = plt.subplots(1, _n_sample_groups, figsize=(6 * _n_sample_groups, 5),
                             sharey=_sharey, constrained_layout=True)
 for g, ax in enumerate(axes2):
@@ -168,7 +175,7 @@ for g, ax in enumerate(axes2):
                 label=f"Sample {idx + 1} (row {row_i})")
     _ax_labels(ax)
     ax.legend(fontsize=13)
-    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=14)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=18)
 
 fig2.savefig(OUTPUT_PATH_SAMPLE, dpi=150)
 shutil.copy(OUTPUT_PATH_SAMPLE, _MAIN_PAPER_DIR)
