@@ -84,10 +84,10 @@ class StageDetector:
                 phase_info['composing_start'] = file_start
             else:
                 # Subsequent queries: composing starts at last valid centre_idx of previous query
-                # that occurred BEFORE this query's first reading. Restricting to readings
-                # before first_reading_ts handles lookbacks (user revisiting the previous
-                # response after they've already started reading the current one), which
-                # would otherwise push composing_start past composing_end and produce a
+                # that occurred BEFORE this query's first reading. The boundary between queries
+                # is fuzzy in the raw data — stray readings near the transition can be labeled
+                # with the previous query_id even after the current query has started. Without
+                # this filter, composing_start could be pushed past composing_end, producing a
                 # negative composing duration.
                 prev_query_id = query_sequence[idx - 1]
                 if prev_query_id in phases:
