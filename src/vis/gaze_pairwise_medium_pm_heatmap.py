@@ -43,7 +43,7 @@ BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
 # Style constants  (mirrors the reference trajectory visualiser)
 # ---------------------------------------------------------------------------
 WRAP       = 60
-FONT_SIZE  = 7
+FONT_SIZE  = 14
 BG         = '#0b0b18'
 PANBG      = '#10101e'
 TXTCLR     = '#6b6b8a'
