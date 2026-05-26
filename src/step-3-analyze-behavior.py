@@ -119,7 +119,7 @@ user_ids_within_time_range.extend(df_database['user_id'].unique())
 
 
 gaze_sources = list(BASE_DIR.rglob("rel_gaze*.csv"))
-mouse_sources = list(BASE_DIR.rglob("rel_mouse_left.csv")) + list(BASE_DIR.rglob("rel_mouse_right.csv"))
+mouse_sources = list(BASE_DIR.rglob("rel_mouse_left.csv")) + list(BASE_DIR.rglob("rel_mouse_right.csv")) + list(BASE_DIR.rglob("rel_mouse.csv"))
 
 for src in gaze_sources + mouse_sources:
     # Only process pairwise files, skip pointwise files
