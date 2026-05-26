@@ -13,40 +13,57 @@ The 6 cluster centroids are plotted as bar charts in a single 2x3 figure.
 """
 
 import os
-import math
+import shutil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.cluster import BisectingKMeans
+from sklearn.cluster import BisectingKMeans, KMeans
 from scipy.cluster.hierarchy import dendrogram
+from worker_filter import BAD_WORKERS
 
 # ---------------------------------------------------------------------------
 # Hyperparameters
 # ---------------------------------------------------------------------------
 MODALITY  = "gaze"        # "gaze" or "mouse"
 SIDE      = "left"        # "left" or "right"
-#DATA_TYPE = "histogram"    # "histogram" or "time_interp"
+# DATA_TYPE = "histogram"    # "histogram" or "time_interp"
 DATA_TYPE = "time_interp"    # "histogram" or "time_interp"
 
-#N_CLUSTERS = 20
-N_CLUSTERS = 10
 RANDOM_STATE = 42
+EXCLUDE_BAD_WORKERS = True   # set False to include all workers
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
+N_GROUPS = 2        # number of shape-similarity groups for centroid/sample plots
+MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
+# Manual overrides: cluster 1-indexed label -> group 0-indexed.  e.g. {4: 1} moves C4 to Group 2.
+CENTROID_GROUP_OVERRIDES: dict = {4: 1}
+# Manual overrides for sample plot: sample 1-indexed label -> group 0-indexed.
+SAMPLE_GROUP_OVERRIDES: dict = {3: 0}
+
+# histogram needs a lower k to avoid tiny outlier clusters; time_interp handles k=10 fine
+N_CLUSTERS = 6 if DATA_TYPE == "histogram" else 10
 
 # ---------------------------------------------------------------------------
 # Derived paths and source label
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+_DATA_DIR       = os.path.join(PROJECT_ROOT, "output", "data")
+_KMEANS_DIR     = os.path.join(PROJECT_ROOT, "output", "kmeans")
+_MAIN_PAPER_DIR = os.path.join(PROJECT_ROOT, "output", "main_paper_images")
+os.makedirs(_KMEANS_DIR,     exist_ok=True)
+os.makedirs(_MAIN_PAPER_DIR, exist_ok=True)
+
 if DATA_TYPE == "time_interp":
     _modality_stem = "gazing" if MODALITY == "gaze" else "mouse"
-    _INPUT_FILE = f"user_{_modality_stem}_time_interp.csv"
+    _INPUT_FILE = f"user_{_modality_stem}_time_interp_{_qc}.csv"
 else:
-    _INPUT_FILE = "user_gazing_hist.csv" if MODALITY == "gaze" else "user_mouse_hist.csv"
-INPUT_PATH = os.path.join(PROJECT_ROOT, "output", _INPUT_FILE)
+    _INPUT_FILE = f"user_gazing_hist_{_qc}.csv" if MODALITY == "gaze" else f"user_mouse_hist_{_qc}.csv"
+INPUT_PATH = os.path.join(_DATA_DIR, _INPUT_FILE)
 
 SOURCE_LABEL = f"{MODALITY}_pairwise_{SIDE}"
-OUTPUT_PATH        = os.path.join(PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans.png")
-OUTPUT_PATH_SAMPLE = os.path.join(PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans_samples.png")
+_stem = f"{SOURCE_LABEL}_kmeans_{DATA_TYPE}_{_qc}"
+OUTPUT_PATH        = os.path.join(_KMEANS_DIR, f"{_stem}.png")
+OUTPUT_PATH_SAMPLE = os.path.join(_KMEANS_DIR, f"{_stem}_samples.png")
 
 N_BINS = 100
 _COL_PREFIX = "pos" if DATA_TYPE == "time_interp" else "bin"
@@ -57,6 +74,8 @@ BIN_CENTERS = (np.linspace(0, 1, N_BINS + 1)[:-1] + np.linspace(0, 1, N_BINS + 1
 # Load and filter
 # ---------------------------------------------------------------------------
 df = pd.read_csv(INPUT_PATH)
+if EXCLUDE_BAD_WORKERS:
+    df = df[~df["user_id"].isin(BAD_WORKERS)]
 subset = df[df["source"] == SOURCE_LABEL].reset_index(drop=True)
 print(f"Rows for {SOURCE_LABEL}: {len(subset)}")
 
@@ -74,81 +93,92 @@ centroids = kmeans.cluster_centers_
 cluster_counts = np.bincount(labels, minlength=N_CLUSTERS)
 
 # ---------------------------------------------------------------------------
-# Shared plot helpers
+# Shared colormap (one color per cluster, consistent across all figures)
 # ---------------------------------------------------------------------------
-def _make_figure(n_panels):
-    n_cols = math.ceil(math.sqrt(n_panels))
-    n_rows = math.ceil(n_panels / n_cols)
-    label_fs = max(6, 10 - n_cols)
-    title_fs = max(7, 11 - n_cols)
-    tick_fs  = max(5,  9 - n_cols)
-    fig, axes = plt.subplots(
-        n_rows, n_cols,
-        figsize=(n_cols * 6, n_rows * 4),
-        sharey=False,
-        constrained_layout=True,
-    )
-    return fig, axes, n_cols, n_rows, label_fs, title_fs, tick_fs
+_cmap = plt.get_cmap("tab10" if N_CLUSTERS <= 10 else "tab20")
+CLUSTER_COLORS = [_cmap(i / max(N_CLUSTERS - 1, 1)) for i in range(N_CLUSTERS)]
 
 
-def _style_ax(ax, title, label_fs, title_fs, tick_fs):
-    ax.set_title(title, fontsize=title_fs)
+def _ax_labels(ax):
     if DATA_TYPE == "time_interp":
-        ax.set_xlabel("Normalized time", fontsize=label_fs)
-        ax.set_ylabel("Relative position\n(centre_idx / response_length)", fontsize=label_fs)
+        ax.set_xlabel("Normalized time", fontsize=14)
+        ax.set_ylabel("Average relative position", fontsize=14)
+        ax.set_ylim(0, 1)
     else:
-        ax.set_xlabel("Relative position\n(centre_idx / response_length)", fontsize=label_fs)
-        ax.set_ylabel("Average probability", fontsize=label_fs)
+        ax.set_xlabel("Relative position", fontsize=14)
+        ax.set_ylabel("Average probability", fontsize=14)
+        ax.set_ylim(bottom=0)   # auto-scale top; histogram probs are ~0–0.05
+    ax.tick_params(axis='both', labelsize=12)
     ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.tick_params(labelsize=tick_fs)
 
 
 # ---------------------------------------------------------------------------
-# Figure 1 — cluster centroids
+# Figure 1 — cluster centroids grouped by shape (N_GROUPS panels)
 # ---------------------------------------------------------------------------
-fig1, axes1, n_cols, n_rows, label_fs, title_fs, tick_fs = _make_figure(N_CLUSTERS)
-bar_width = 1 / N_BINS
+_valid_idxs = np.where(cluster_counts >= MIN_CLUSTER_SAMPLES)[0]
+_skipped = np.where(cluster_counts < MIN_CLUSTER_SAMPLES)[0]
+if len(_skipped):
+    print(f"Excluding {len(_skipped)} tiny cluster(s) from group plot: "
+          + ", ".join(f"C{i+1}(n={cluster_counts[i]})" for i in _skipped))
 
-for idx, ax in enumerate(axes1.flat):
-    if idx < N_CLUSTERS:
-        ax.bar(BIN_CENTERS, centroids[idx], width=bar_width, align="center",
-               edgecolor="none", alpha=0.8)
-        _style_ax(ax, f"Cluster {idx + 1}  (n={cluster_counts[idx]})", label_fs, title_fs, tick_fs)
-    else:
-        ax.set_visible(False)
+_n_groups = min(N_GROUPS, len(_valid_idxs))   # can't have more groups than valid clusters
+_centroid_group_labels = KMeans(
+    n_clusters=_n_groups, random_state=RANDOM_STATE, n_init=10
+).fit_predict(centroids[_valid_idxs])
 
-fig1.suptitle(
-    f"BisectingKMeans (k={N_CLUSTERS}, largest_cluster) — {SOURCE_LABEL}  "
-    f"(total n={len(subset)})",
-    fontsize=max(9, 13 - n_cols),
-)
+for _c1idx, _tgt_grp in CENTROID_GROUP_OVERRIDES.items():
+    _pos = np.where(_valid_idxs == _c1idx - 1)[0]
+    if len(_pos):
+        _centroid_group_labels[_pos[0]] = _tgt_grp
+
+_sharey = DATA_TYPE == "time_interp"   # histogram groups have very different y ranges
+fig1, axes1 = plt.subplots(1, _n_groups, figsize=(6 * _n_groups, 5),
+                            sharey=_sharey, constrained_layout=True)
+for g, ax in enumerate(axes1):
+    member_positions = np.where(_centroid_group_labels == g)[0]
+    member_idxs = _valid_idxs[member_positions]
+    for idx in member_idxs:
+        ax.plot(BIN_CENTERS, centroids[idx], color=CLUSTER_COLORS[idx], lw=1.5,
+                label=f"C{idx + 1} (n={cluster_counts[idx]})")
+    _ax_labels(ax)
+    ax.legend(fontsize=13)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=18)
+
 fig1.savefig(OUTPUT_PATH, dpi=150)
+shutil.copy(OUTPUT_PATH, _MAIN_PAPER_DIR)
 print(f"Saved centroids plot to {OUTPUT_PATH}")
 
 # ---------------------------------------------------------------------------
-# Figure 2 — random sample of N_CLUSTERS rows
+# Figure 2 — random sample rows grouped by shape (N_GROUPS panels)
 # ---------------------------------------------------------------------------
 rng = np.random.default_rng(RANDOM_STATE)
 sample_idx = rng.choice(len(subset), size=N_CLUSTERS, replace=False)
 sample_rows = X[sample_idx]
 
-fig2, axes2, n_cols2, _, label_fs2, title_fs2, tick_fs2 = _make_figure(N_CLUSTERS)
+_n_sample_groups = min(N_GROUPS, N_CLUSTERS)
+_sample_group_labels = KMeans(
+    n_clusters=_n_sample_groups, random_state=RANDOM_STATE, n_init=10
+).fit_predict(sample_rows)
 
-for idx, ax in enumerate(axes2.flat):
-    if idx < N_CLUSTERS:
+for _s1idx, _tgt_grp in SAMPLE_GROUP_OVERRIDES.items():
+    _pos = _s1idx - 1
+    if 0 <= _pos < len(_sample_group_labels):
+        _sample_group_labels[_pos] = _tgt_grp
+
+fig2, axes2 = plt.subplots(1, _n_sample_groups, figsize=(6 * _n_sample_groups, 5),
+                            sharey=_sharey, constrained_layout=True)
+for g, ax in enumerate(axes2):
+    member_idxs = np.where(_sample_group_labels == g)[0]
+    for idx in member_idxs:
         row_i = sample_idx[idx]
-        ax.bar(BIN_CENTERS, sample_rows[idx], width=bar_width, align="center",
-               edgecolor="none", alpha=0.8)
-        _style_ax(ax, f"Sample {idx + 1}  (row {row_i})", label_fs2, title_fs2, tick_fs2)
-    else:
-        ax.set_visible(False)
+        ax.plot(BIN_CENTERS, sample_rows[idx], color=CLUSTER_COLORS[idx], lw=1.2, alpha=0.75,
+                label=f"Sample {idx + 1} (row {row_i})")
+    _ax_labels(ax)
+    ax.legend(fontsize=13)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=18)
 
-fig2.suptitle(
-    f"Random samples (n={N_CLUSTERS}) — {SOURCE_LABEL}  (total n={len(subset)})",
-    fontsize=max(9, 13 - n_cols2),
-)
 fig2.savefig(OUTPUT_PATH_SAMPLE, dpi=150)
+shutil.copy(OUTPUT_PATH_SAMPLE, _MAIN_PAPER_DIR)
 print(f"Saved samples plot to {OUTPUT_PATH_SAMPLE}")
 
 # ---------------------------------------------------------------------------
@@ -219,9 +249,7 @@ ax3.set_title(
 )
 ax3.set_ylabel("Cluster inertia at split", fontsize=10)
 
-OUTPUT_PATH_DENDRO = os.path.join(
-    PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans_dendrogram.png"
-)
+OUTPUT_PATH_DENDRO = os.path.join(_KMEANS_DIR, f"{_stem}_dendrogram.png")
 fig3.savefig(OUTPUT_PATH_DENDRO, dpi=150)
 print(f"Saved dendrogram to {OUTPUT_PATH_DENDRO}")
 
@@ -253,55 +281,41 @@ while _bfs_q:
         _bfs_q.append((_node.left,  _depth + 1, _depth, _pos))
         _bfs_q.append((_node.right, _depth + 1, _depth, _pos))
 
-_n_layers       = len(_node_by_layer)
-_max_per_layer  = max(len(v) for v in _node_by_layer.values())
+_n_layers = len(_node_by_layer)
 
 fig4, axes4 = plt.subplots(
-    _n_layers, _max_per_layer,
-    figsize=(max(_max_per_layer * 5, 8), _n_layers * 3.5),
+    _n_layers, 1,
+    figsize=(9, _n_layers * 3),
     squeeze=False,
     constrained_layout=True,
 )
-for _row in axes4:
-    for _ax in _row:
-        _ax.set_visible(False)
 
 for _depth in range(_n_layers):
+    _ax = axes4[_depth, 0]
     _nodes = _node_by_layer[_depth]
-    _n     = len(_nodes)
-    _start = (_max_per_layer - _n) // 2  # centre nodes within the row
+    _layer_cmap = plt.get_cmap("tab10" if len(_nodes) <= 10 else "tab20")
 
     for _pos, (_node, _par_depth, _par_pos) in enumerate(_nodes):
-        _ax = axes4[_depth, _start + _pos]
-        _ax.set_visible(True)
         _center = _true_center(_node, X, labels)
-        _ax.bar(BIN_CENTERS, _center, width=bar_width,
-                align="center", edgecolor="none", alpha=0.8)
-        _ax.set_xlim(0, 1)
-        _ax.set_ylim(0, 1)
-        _ax.tick_params(labelsize=6)
-        if DATA_TYPE == "time_interp":
-            _ax.set_xlabel("Norm. time", fontsize=7)
-            _ax.set_ylabel("Rel. position", fontsize=7)
-        else:
-            _ax.set_xlabel("Rel. position", fontsize=7)
-            _ax.set_ylabel("Avg. prob.", fontsize=7)
+        _n_samples = sum(cluster_counts[lbl] for lbl in _subtree_leaf_labels(_node))
+        _leaf_tag  = f" [C{_node.label + 1}]" if _node.left is None else ""
+        _node_color = _layer_cmap(_pos / max(len(_nodes) - 1, 1))
+        _ax.plot(BIN_CENTERS, _center, color=_node_color, lw=1.5,
+                 label=f"Node {_pos}{_leaf_tag} (n={_n_samples})")
 
-        _n_samples  = sum(cluster_counts[lbl] for lbl in _subtree_leaf_labels(_node))
-        _leaf_tag   = f"  [C{_node.label + 1}]" if _node.left is None else ""
-        _parent_tag = "(root)" if _par_depth is None else f"↑ Layer {_par_depth}, Node {_par_pos}"
-        _ax.set_title(
-            f"Layer {_depth}, Node {_pos}{_leaf_tag}  (n={_n_samples})\n{_parent_tag}",
-            fontsize=8,
-        )
+    _ax_labels(_ax)
+    _ax.tick_params(labelsize=8)
+    _ax.set_title(
+        f"Layer {_depth}  ({len(_nodes)} node{'s' if len(_nodes) > 1 else ''})",
+        fontsize=10,
+    )
+    _ax.legend(fontsize=7, ncol=min(4, len(_nodes)))
 
 fig4.suptitle(
     f"BisectingKMeans centers by layer — {SOURCE_LABEL}  (k={N_CLUSTERS})",
     fontsize=12,
 )
-OUTPUT_PATH_LAYERS = os.path.join(
-    PROJECT_ROOT, "output", f"{SOURCE_LABEL}_kmeans_layers.png"
-)
+OUTPUT_PATH_LAYERS = os.path.join(_KMEANS_DIR, f"{_stem}_layers.png")
 fig4.savefig(OUTPUT_PATH_LAYERS, dpi=150)
 print(f"Saved layer-by-layer centers to {OUTPUT_PATH_LAYERS}")
 

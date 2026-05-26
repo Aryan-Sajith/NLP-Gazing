@@ -14,19 +14,31 @@ import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from worker_filter import BAD_WORKERS
+
+# ---------------------------------------------------------------------------
+# Hyperparameters
+# ---------------------------------------------------------------------------
+EXCLUDE_BAD_WORKERS = True   # set False to include all workers
+
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 USER_BEHAVIOR_DIR = os.path.join(PROJECT_ROOT, "user_behavior")
-QUERY_LOGS_PATH = os.path.join(PROJECT_ROOT, "query_logs_table.csv")
-GAZE_OUTPUT_PATH  = os.path.join(PROJECT_ROOT, "output", "user_gazing_hist.csv")
-MOUSE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "output", "user_mouse_hist.csv")
-GAZE_PLOT_PATH        = os.path.join(PROJECT_ROOT, "output", "gaze_position_hist.png")
-MOUSE_PLOT_PATH       = os.path.join(PROJECT_ROOT, "output", "mouse_position_hist.png")
-GAZE_LEN_PLOT_PATH    = os.path.join(PROJECT_ROOT, "output", "gaze_length_category_hist.png")
-MOUSE_LEN_PLOT_PATH   = os.path.join(PROJECT_ROOT, "output", "mouse_length_category_hist.png")
+QUERY_LOGS_PATH   = os.path.join(PROJECT_ROOT, "query_logs_table.csv")
+_DATA_DIR = os.path.join(PROJECT_ROOT, "output", "data")
+_POS_DIR  = os.path.join(PROJECT_ROOT, "output", "position")
+os.makedirs(_DATA_DIR, exist_ok=True)
+os.makedirs(_POS_DIR,  exist_ok=True)
+GAZE_OUTPUT_PATH  = os.path.join(_DATA_DIR, f"user_gazing_hist_{_qc}.csv")
+MOUSE_OUTPUT_PATH = os.path.join(_DATA_DIR, f"user_mouse_hist_{_qc}.csv")
+GAZE_PLOT_PATH        = os.path.join(_POS_DIR, f"gaze_position_hist_{_qc}.png")
+MOUSE_PLOT_PATH       = os.path.join(_POS_DIR, f"mouse_position_hist_{_qc}.png")
+GAZE_LEN_PLOT_PATH    = os.path.join(_POS_DIR, f"gaze_length_category_hist_{_qc}.png")
+MOUSE_LEN_PLOT_PATH   = os.path.join(_POS_DIR, f"mouse_length_category_hist_{_qc}.png")
 
 N_BINS = 100
 BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
@@ -78,6 +90,8 @@ for filename, source, response_col in FILE_CONFIGS:
         parts = filepath.split(os.sep)
         task_id = int(parts[-2])
         user_id = parts[-3]
+        if EXCLUDE_BAD_WORKERS and user_id in BAD_WORKERS:
+            continue
 
         df = pd.read_csv(filepath)
 
@@ -151,41 +165,54 @@ print(f"Saved mouse histogram dataframe to {MOUSE_OUTPUT_PATH}")
 # ---------------------------------------------------------------------------
 bin_centers = (BIN_EDGES[:-1] + BIN_EDGES[1:]) / 2
 
+AVG_CURVE_STYLES = [
+    ("Overall",          None,                {"color": "black",      "lw": 2.5, "ls": "-"}),
+    ("pointwise",        "{p}_pointwise",     {"color": "tab:blue",   "lw": 1.5, "ls": "--"}),
+    ("pairwise (left)",  "{p}_pairwise_left", {"color": "tab:orange", "lw": 1.5, "ls": "-."}),
+    ("pairwise (right)", "{p}_pairwise_right",{"color": "tab:green",  "lw": 1.5, "ls": ":"}),
+]
 
-def _bar(ax, subset, title):
-    avg_probs = subset[BIN_COLS].mean().values
-    ax.bar(bin_centers, avg_probs, width=1 / N_BINS, align="center", edgecolor="none", alpha=0.8)
-    ax.set_title(f"{title} (n={len(subset)})")
-    ax.set_xlabel("Relative position (centre_idx / response_length)")
-    ax.set_ylabel("Average probability")
-    ax.set_xlim(0, 1)
+LEN_CAT_STYLES = {
+    "short":  {"color": "tab:blue",   "lw": 1.5, "ls": "-"},
+    "medium": {"color": "tab:orange", "lw": 1.5, "ls": "--"},
+    "long":   {"color": "tab:green",  "lw": 1.5, "ls": "-."},
+}
 
 
 def plot_avg_histograms(df, prefix, suptitle, save_path):
-    panels = [
-        ("Overall",                df),
-        (f"{prefix}_pointwise",      df[df["source"] == f"{prefix}_pointwise"]),
-        (f"{prefix}_pairwise_left",  df[df["source"] == f"{prefix}_pairwise_left"]),
-        (f"{prefix}_pairwise_right", df[df["source"] == f"{prefix}_pairwise_right"]),
-    ]
-    fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharey=False)
-    for ax, (title, subset) in zip(axes.flat, panels):
-        _bar(ax, subset, title)
-    fig.suptitle(suptitle, fontsize=13)
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for label, source_tpl, style in AVG_CURVE_STYLES:
+        subset = df if source_tpl is None else df[df["source"] == source_tpl.format(p=prefix)]
+        if subset.empty:
+            continue
+        avg_probs = subset[BIN_COLS].mean().values
+        ax.plot(bin_centers, avg_probs, label=f"{label} (n={len(subset)})", **style)
+    ax.set_xlabel("Relative position (centre_idx / response_length)")
+    ax.set_ylabel("Average probability")
+    ax.set_xlim(0, 1)
+    ax.legend()
+    ax.set_title(suptitle, fontsize=13)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
     plt.show()
     print(f"Saved plot to {save_path}")
 
 
 def plot_length_category_histograms(df, suptitle, save_path):
-    categories = ["short", "medium", "long"]
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=False)
-    for ax, cat in zip(axes, categories):
-        _bar(ax, df[df["length_category"] == cat], cat)
-    fig.suptitle(suptitle, fontsize=13)
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for cat, style in LEN_CAT_STYLES.items():
+        subset = df[df["length_category"] == cat]
+        if subset.empty:
+            continue
+        avg_probs = subset[BIN_COLS].mean().values
+        ax.plot(bin_centers, avg_probs, label=f"{cat} (n={len(subset)})", **style)
+    ax.set_xlabel("Relative position (centre_idx / response_length)")
+    ax.set_ylabel("Average probability")
+    ax.set_xlim(0, 1)
+    ax.legend()
+    ax.set_title(suptitle, fontsize=13)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
     plt.show()
     print(f"Saved plot to {save_path}")
 

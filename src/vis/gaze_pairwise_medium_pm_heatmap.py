@@ -18,6 +18,8 @@ Layout
 import os
 import csv
 import random
+import shutil
+from worker_filter import BAD_WORKERS
 import tempfile
 import numpy as np
 import polars as pl
@@ -28,6 +30,19 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches
 from matplotlib.font_manager import FontProperties
+
+
+def _measure_char_dims(font_size: int, family: str = 'monospace', dpi: int = 100) -> tuple[int, int]:
+    """Return (char_width_px, line_height_px) as rendered by matplotlib at the given DPI."""
+    fig, ax = plt.subplots(figsize=(6, 2), dpi=dpi)
+    fp = FontProperties(size=font_size, family=family)
+    t = ax.text(0, 0.5, 'M' * 20, fontproperties=fp, transform=ax.transData)
+    fig.canvas.draw()
+    bb = t.get_window_extent(fig.canvas.get_renderer())
+    char_w  = max(1, round(bb.width / 20))
+    line_h  = max(1, round(bb.height * 1.4))   # add ~40% leading
+    plt.close(fig)
+    return char_w, line_h
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -44,22 +59,25 @@ BIN_EDGES = np.linspace(0, 1, N_BINS + 1)
 # ---------------------------------------------------------------------------
 WRAP       = 60
 FONT_SIZE  = 14
+
 BG         = '#0b0b18'
 PANBG      = '#10101e'
 TXTCLR     = '#6b6b8a'
 BORDERS    = ['#00b4d8', '#4cc9f0']
 
 # Character-grid coordinate space for pymovements
-CHAR_SCALE  = 14    # "pixels" per char unit  (arbitrary; sets spatial resolution)
+CHAR_SCALE, LINE_SCALE = _measure_char_dims(FONT_SIZE)  # width / line-height in px
 N_TOTAL     = 8000  # total weighted gaze samples per panel
-JITTER_STD  = 1.8   # Gaussian position jitter (char units) for smooth interpolation
+JITTER_STD  = 1  # Gaussian position jitter (char units) for smooth interpolation
 
-RANDOM_SEED = None  # set to int for reproducible pair selection
+RANDOM_SEED = 81  # set to int for reproducible pair selection
+EXCLUDE_BAD_WORKERS = True   # set False to include all workers
+_qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 
 # ---------------------------------------------------------------------------
 # *** Hyperparameters ***
 # ---------------------------------------------------------------------------
-LENGTH_CATEGORY = 'medium'   # one of: 'short' | 'medium' | 'long'
+LENGTH_CATEGORY = 'long'   # one of: 'short' | 'medium' | 'long'
 MODALITY        = 'mouse'     # one of: 'gaze'  | 'mouse'
 # ---------------------------------------------------------------------------
 
@@ -69,13 +87,18 @@ assert MODALITY in ('gaze', 'mouse'), \
     f"MODALITY must be 'gaze' or 'mouse', got '{MODALITY}'"
 
 # Derived from MODALITY
-_HIST_FILE  = 'user_gazing_hist.csv' if MODALITY == 'gaze' else 'user_mouse_hist.csv'
-HIST_PATH   = os.path.join(PROJECT_ROOT, "output", _HIST_FILE)
-SRC_LEFT    = f'{MODALITY}_pairwise_left'
-SRC_RIGHT   = f'{MODALITY}_pairwise_right'
+_DATA_DIR       = os.path.join(PROJECT_ROOT, "output", "data")
+_HEAT_DIR       = os.path.join(PROJECT_ROOT, "output", "heatmap")
+_MAIN_PAPER_DIR = os.path.join(PROJECT_ROOT, "output", "main_paper_images")
+os.makedirs(_HEAT_DIR,       exist_ok=True)
+os.makedirs(_MAIN_PAPER_DIR, exist_ok=True)
+_HIST_FILE = f'user_gazing_hist_{_qc}.csv' if MODALITY == 'gaze' else f'user_mouse_hist_{_qc}.csv'
+HIST_PATH  = os.path.join(_DATA_DIR, _HIST_FILE)
+SRC_LEFT   = f'{MODALITY}_pairwise_left'
+SRC_RIGHT  = f'{MODALITY}_pairwise_right'
 
-OUTPUT_PATH = os.path.join(PROJECT_ROOT, "output",
-                           f"{MODALITY}_pairwise_{LENGTH_CATEGORY}_pm_heatmap.png")
+OUTPUT_PATH = os.path.join(_HEAT_DIR,
+                           f"{MODALITY}_pairwise_{LENGTH_CATEGORY}_pm_heatmap_{_qc}.png")
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +108,9 @@ hist_rows: list[dict] = []
 with open(HIST_PATH) as f:
     for row in csv.DictReader(f):
         hist_rows.append(row)
+
+if EXCLUDE_BAD_WORKERS:
+    hist_rows = [r for r in hist_rows if r['user_id'] not in BAD_WORKERS]
 
 medium_left  = [r for r in hist_rows
                 if r['length_category'] == LENGTH_CATEGORY
@@ -179,22 +205,25 @@ def build_map(text: str, wrap_width: int = WRAP):
 # ---------------------------------------------------------------------------
 def render_text_background(display_lines: list[str], n_lines: int,
                            filepath: str, dpi: int = 100) -> None:
-    """Save monospace text on dark background to PNG for use as pm stimulus."""
-    # Coordinate space: x in [0, WRAP], y in [0, n_lines] with y=0 at top.
-    # Figure size chosen to give reasonable character proportions.
-    fig_w = WRAP * 0.15          # inches
-    fig_h = n_lines * 0.22       # inches
-    fig, ax = plt.subplots(figsize=(max(fig_w, 4), max(fig_h, 2)), facecolor=BG)
+    """Save monospace text on background to PNG for use as pm stimulus.
+
+    The image is sized to exactly WRAP*CHAR_SCALE × n_lines*CHAR_SCALE pixels
+    so that it maps 1-to-1 onto the pymovements pixel coordinate space and
+    text characters align with their heatmap positions.
+    """
+    fig_w = WRAP * CHAR_SCALE / dpi        # exact pixel match in x
+    fig_h = n_lines * LINE_SCALE / dpi    # exact pixel match in y
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=BG)
     ax.set_facecolor(BG)
     ax.set_xlim(0, WRAP)
     ax.set_ylim(n_lines, 0)   # y=0 at top, y=n_lines at bottom
     ax.axis('off')
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)   # no margins
     fp = FontProperties(size=FONT_SIZE, family='monospace')
     for ln, line in enumerate(display_lines):
         ax.text(0, ln + 0.5, line, fontproperties=fp,
                 color=TXTCLR, va='center', ha='left', clip_on=True)
-    fig.savefig(filepath, dpi=dpi, bbox_inches='tight', pad_inches=0,
-                facecolor=BG)
+    fig.savefig(filepath, dpi=dpi, facecolor=BG)
     plt.close(fig)
 
 
@@ -202,7 +231,9 @@ def render_text_background(display_lines: list[str], n_lines: int,
 # Build weighted gaze point cloud from average histogram
 # ---------------------------------------------------------------------------
 def make_gaze_object(text: str, c2p: dict, avg_probs: np.ndarray,
-                     n_lines: int, rng: np.random.Generator) -> pm.Gaze:
+                     n_lines: int, rng: np.random.Generator,
+                     jitter_x: float = JITTER_STD,
+                     jitter_y: float = JITTER_STD) -> pm.Gaze:
     """
     Convert average 1-D histogram to a 2-D weighted gaze point cloud and wrap
     it in a pm.Gaze object in the character-grid pixel coordinate space.
@@ -218,17 +249,17 @@ def make_gaze_object(text: str, c2p: dict, avg_probs: np.ndarray,
         if n_samp == 0:
             continue
         x_base = col * CHAR_SCALE + CHAR_SCALE // 2
-        y_base = ln  * CHAR_SCALE + CHAR_SCALE // 2
-        xs_list.append(rng.normal(x_base, JITTER_STD, n_samp))
-        ys_list.append(rng.normal(y_base, JITTER_STD, n_samp))
+        y_base = ln  * LINE_SCALE + LINE_SCALE // 2
+        xs_list.append(rng.normal(x_base, jitter_x, n_samp))
+        ys_list.append(rng.normal(y_base, jitter_y, n_samp))
 
     xs = np.clip(np.concatenate(xs_list), 0, WRAP * CHAR_SCALE - 1)
-    ys = np.clip(np.concatenate(ys_list), 0, n_lines * CHAR_SCALE - 1)
+    ys = np.clip(np.concatenate(ys_list), 0, n_lines * LINE_SCALE - 1)
 
     df = pl.DataFrame({'x_pix': xs.tolist(), 'y_pix': ys.tolist()})
     exp = pm.Experiment(
         screen_width_px=WRAP * CHAR_SCALE,
-        screen_height_px=n_lines * CHAR_SCALE,
+        screen_height_px=n_lines * LINE_SCALE,
         screen_width_cm=40, screen_height_cm=30,
         distance_cm=60,
         origin='upper left',
@@ -246,17 +277,17 @@ def draw_hist_panel(ax, avg_probs: np.ndarray, border: str,
     ax.set_facecolor(PANBG)
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(1.5)
-    ax.tick_params(colors='white', labelsize=7)
+    ax.tick_params(colors='black', labelsize=7)
     ax.bar(bin_centers, avg_probs, width=1 / N_BINS, align='center',
            color=border, edgecolor='none', alpha=0.75)
     ax.set_xlim(0, 1)
     ax.set_xlabel('Relative position  (char_idx / response_length)',
-                  color='white', fontsize=8)
-    ax.set_ylabel('Average probability', color='white', fontsize=8)
+                  color='black', fontsize=8)
+    ax.set_ylabel('Average probability', color='black', fontsize=8)
     ax.set_title(f'[{source_label}]  avg histogram  (n={n_samples} {LENGTH_CATEGORY} samples)',
                  color=border, fontsize=9, pad=4)
-    ax.yaxis.grid(True, color='#222244', linewidth=0.5, zorder=0)
-    ax.xaxis.grid(True, color='#222244', linewidth=0.5, zorder=0)
+    ax.yaxis.grid(True, color='#cccccc', linewidth=0.5, zorder=0)
+    ax.xaxis.grid(True, color='#cccccc', linewidth=0.5, zorder=0)
     ax.set_axisbelow(True)
 
 
@@ -275,8 +306,19 @@ screen_h = n_lines * CHAR_SCALE
 # Figure height: heatmap panel height is proportional to text line count;
 # bar chart row is fixed.
 heat_h   = max(n_lines * 0.22, 6)   # inches
-bar_h    = 2.8                        # inches
-fig_h    = heat_h + bar_h + 1.2
+fig_h    = heat_h + 0.5
+
+# Anisotropic jitter: scale per-axis so Gaussian spread is isotropic in display space.
+# Each panel occupies fig_width * col_frac inches wide and fig_h * row_frac inches tall.
+# GridSpec: left=0.03, right=0.97, wspace=0.06 (fraction of avg col width), 2 cols
+# → col_width_frac = 0.94 / (2 + 0.06); GridSpec: top=0.97, bottom=0.05 → row_frac=0.92
+_ax_w_in   = 18 * 0.94 / (2 + 0.06)
+_ax_h_in   = fig_h * 0.92
+_char_w_in = _ax_w_in / WRAP          # display inches per character column
+_char_h_in = _ax_h_in / n_lines       # display inches per text line
+# Normalise to y; shrink x jitter when characters appear wider than tall
+jitter_x = JITTER_STD * (_char_h_in / _char_w_in)
+jitter_y = JITTER_STD
 
 rng = np.random.default_rng(RANDOM_SEED)
 
@@ -292,37 +334,26 @@ render_text_background(display_lines2, n_lines, bg_path2)
 # ---------------------------------------------------------------------------
 # Build pm.Gaze objects
 # ---------------------------------------------------------------------------
-gaze_left  = make_gaze_object(text1, c2p1, avg_left,  n_lines, rng)
-gaze_right = make_gaze_object(text2, c2p2, avg_right, n_lines, rng)
+gaze_left  = make_gaze_object(text1, c2p1, avg_left,  n_lines, rng, jitter_x, jitter_y)
+gaze_right = make_gaze_object(text2, c2p2, avg_right, n_lines, rng, jitter_x, jitter_y)
 
 # ---------------------------------------------------------------------------
 # Assemble figure
 # ---------------------------------------------------------------------------
 fig = plt.figure(figsize=(18, fig_h), facecolor=BG)
-fig.suptitle(
-    f'Interpolated {MODALITY.capitalize()} Heatmap  (pymovements)  —  {LENGTH_CATEGORY.capitalize()} Response Length  ·  '
-    f'{SRC_LEFT}  |  {SRC_RIGHT}\n'
-    f'Randomly selected: user={user_id}  task={task_id}  query={query_id}  ·  '
-    f'{len(medium_left)} left samples  /  {len(medium_right)} right samples',
-    color='white', fontsize=12, fontweight='bold', y=1.0,
-)
 
 gs = gridspec.GridSpec(
-    2, 2, figure=fig,
-    left=0.03, right=0.97, top=0.94, bottom=0.05,
-    hspace=0.22, wspace=0.06,
-    height_ratios=[heat_h, bar_h],
+    1, 3, figure=fig,
+    left=0.03, right=0.97, top=0.97, bottom=0.05,
+    wspace=0.04,
+    width_ratios=[1, 0.05, 1],
 )
 
 ax_heat_left  = fig.add_subplot(gs[0, 0])
-ax_heat_right = fig.add_subplot(gs[0, 1])
-ax_hist_left  = fig.add_subplot(gs[1, 0])
-ax_hist_right = fig.add_subplot(gs[1, 1])
+ax_cbar       = fig.add_subplot(gs[0, 1])
+ax_heat_right = fig.add_subplot(gs[0, 2])
 
-# ── pymovements heatmaps ────────────────────────────────────────────────────
-short1 = text1[:60].replace('\n', ' ')
-short2 = text2[:60].replace('\n', ' ')
-
+# ── pymovements heatmaps (colorbars disabled; shared scale added manually) ──
 pm.plotting.heatmap(
     gaze=gaze_left,
     position_column='pixel',
@@ -330,10 +361,8 @@ pm.plotting.heatmap(
     cmap='jet',
     interpolation='gaussian',
     origin='upper',
-    show_cbar=True,
-    cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_LEFT}]  query {query_id}  ·  user {user_id}  ·  {ts}\n'
-           f'"{short1}…"  ·  {len(text1)} chars'),
+    show_cbar=False,
+    title='',
     xlabel='Character column',
     ylabel='Text line',
     show=False,
@@ -351,10 +380,8 @@ pm.plotting.heatmap(
     cmap='jet',
     interpolation='gaussian',
     origin='upper',
-    show_cbar=True,
-    cbar_label=f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})',
-    title=(f'[{SRC_RIGHT}]  query {query_id}  ·  user {user_id}  ·  {ts}\n'
-           f'"{short2}…"  ·  {len(text2)} chars'),
+    show_cbar=False,
+    title='',
     xlabel='Character column',
     ylabel='Text line',
     show=False,
@@ -365,24 +392,40 @@ pm.plotting.heatmap(
     ax=ax_heat_right,
 )
 
-# Style heatmap panel borders to match the reference visual
+# Shared colour scale: heatmap image is the last imshow artist in each axes
+img_left  = ax_heat_left.get_images()[-1]
+img_right = ax_heat_right.get_images()[-1]
+shared_vmax = max(float(img_left.get_array().max()),
+                  float(img_right.get_array().max()))
+for img in (img_left, img_right):
+    img.set_clim(0, shared_vmax)
+
+# Style heatmap panel borders
 for ax, border in [(ax_heat_left, BORDERS[0]), (ax_heat_right, BORDERS[1])]:
     for sp in ax.spines.values():
         sp.set_edgecolor(border); sp.set_linewidth(2.0)
-    ax.tick_params(colors='white', labelsize=7)
-    ax.title.set_color('white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
+    ax.tick_params(colors='black', labelsize=12)
+    ax.xaxis.label.set_color('black')
+    ax.yaxis.label.set_color('black')
+    ax.xaxis.label.set_fontsize(14)
+    ax.yaxis.label.set_fontsize(14)
 
-# ── Average histogram bar charts ────────────────────────────────────────────
-draw_hist_panel(ax_hist_left,  avg_left,  BORDERS[0], SRC_LEFT,  len(medium_left))
-draw_hist_panel(ax_hist_right, avg_right, BORDERS[1], SRC_RIGHT, len(medium_right))
+# Single shared colorbar in the centre column
+cbar = fig.colorbar(img_right, cax=ax_cbar)
+cbar.ax.yaxis.set_label_position('left')
+cbar.set_label(f'Avg fixation weight [a.u.]  ({LENGTH_CATEGORY})', fontsize=13, labelpad=6)
+cbar.ax.tick_params(labelsize=12)
+
+# Nudge colorbar slightly left so it sits visually centred between the panels
+fig.canvas.draw()
+_pos = ax_cbar.get_position()
+ax_cbar.set_position([_pos.x0 - 0.01, _pos.y0, _pos.width, _pos.height])
 
 plt.savefig(OUTPUT_PATH, dpi=150, bbox_inches='tight', facecolor=BG)
 plt.close(fig)
+shutil.copy(OUTPUT_PATH, _MAIN_PAPER_DIR)
 
 # Clean up temp files
-import shutil
 shutil.rmtree(tmp_dir, ignore_errors=True)
 
 print(f'Saved → {OUTPUT_PATH}')
