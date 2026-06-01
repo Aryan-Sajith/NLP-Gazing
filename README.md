@@ -174,7 +174,7 @@ The final `-query_id_assigned.csv` files contain the following columns:
 | `query_id`             | The ID of the query the user was viewing.                                                                | integer   |
 | `is_experimental_text` | A boolean flag that is `true` if the user was looking at the static instructional prompt.                | boolean   |
 | `is_not_looking`       | A boolean flag that is `true` if the user's gaze was off-screen (typically at coordinates -1, -1).         | boolean   |
-
+| `response_gaze_percentage` | Percentage of entries per query per user spent gazing at the response                                | float    |
 ---
 
 ## Pairwise Feature Engineering Pipeline
