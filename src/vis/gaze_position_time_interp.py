@@ -217,11 +217,11 @@ def plot_avg_curves(df, prefix, suptitle, save_path):
             continue
         avg_pos = subset[POS_COLS].mean().values
         ax.plot(INTERP_TIMES, avg_pos, label=f"{label} (n={len(subset)})", **style)
-    ax.set_xlabel("Normalized time", fontsize=14)
-    ax.set_ylabel("Average relative position", fontsize=14)
-    ax.tick_params(axis='both', labelsize=12)
+    ax.set_xlabel("Normalized time", fontsize=18, labelpad=8)
+    ax.set_ylabel("Average relative position", fontsize=18)
+    ax.tick_params(axis='both', labelsize=16)
     ax.set_xlim(0, 1)
-    ax.legend(fontsize=13)
+    ax.legend(fontsize=16)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     plt.show()
@@ -236,11 +236,11 @@ def plot_length_category_curves(df, suptitle, save_path):
             continue
         avg_pos = subset[POS_COLS].mean().values
         ax.plot(INTERP_TIMES, avg_pos, label=f"{cat} (n={len(subset)})", **style)
-    ax.set_xlabel("Normalized time", fontsize=14)
-    ax.set_ylabel("Average relative position", fontsize=14)
-    ax.tick_params(axis='both', labelsize=12)
+    ax.set_xlabel("Normalized time", fontsize=18, labelpad=8)
+    ax.set_ylabel("Average relative position", fontsize=18)
+    ax.tick_params(axis='both', labelsize=16)
     ax.set_xlim(0, 1)
-    ax.legend(fontsize=13)
+    ax.legend(fontsize=16)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
     plt.show()
