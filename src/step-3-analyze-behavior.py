@@ -46,11 +46,7 @@ START_DATE = pd.to_datetime("2024-01-19 00:00:01")
 END_DATE = pd.to_datetime("2027-11-30 14:24:56")
 
 OUTPUT_CSV = Path("all_metrics.csv")
-<<<<<<< HEAD
 TO_OUTPUT_CSV = False #False gives txt file 
-=======
-TO_OUTPUT_CSV = True #False gives txt file
->>>>>>> 2fd86149026836d92d61d3dc2fa433a6cae212f7
 # --------------------------------------------------------------------------- #
 # UTILITIES
 # --------------------------------------------------------------------------- #
@@ -126,15 +122,8 @@ gaze_sources = list(BASE_DIR.rglob("rel_gaze*.csv"))
 mouse_sources = list(BASE_DIR.rglob("rel_mouse_left.csv")) + list(BASE_DIR.rglob("rel_mouse_right.csv")) + list(BASE_DIR.rglob("rel_mouse.csv"))
 
 for src in gaze_sources + mouse_sources:
-    # Only process pairwise files, skip pointwise files
-    # if src.name not in PAIRWISE_FILES:
-    #     continue
-
-    # derive user_id / task_id from path:  user_behavior/user_id/task_id/file.csv
     try:
         _, user_id, task_id, _ = src.parts[-4:]
-        # if user_id != 'A3U042Q64BVD6G':
-        #     continue
     except ValueError:
         continue
 
