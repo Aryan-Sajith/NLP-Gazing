@@ -35,7 +35,11 @@ _qc = "filtered" if EXCLUDE_BAD_WORKERS else "all"
 N_GROUPS = 2        # number of shape-similarity groups for centroid/sample plots
 MIN_CLUSTER_SAMPLES = 10  # clusters smaller than this are excluded from group plots
 # Manual overrides: cluster 1-indexed label -> group 0-indexed.  e.g. {4: 1} moves C4 to Group 2.
-CENTROID_GROUP_OVERRIDES: dict = {4: 1}
+# Fully specified: C6,C7,C8,C9 -> Group 1 (0); all others -> Group 2 (1).
+CENTROID_GROUP_OVERRIDES: dict = {
+    1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 10: 1,
+    6: 0, 7: 0, 8: 0, 9: 0,
+}
 # Manual overrides for sample plot: sample 1-indexed label -> group 0-indexed.
 SAMPLE_GROUP_OVERRIDES: dict = {3: 0}
 
@@ -101,14 +105,14 @@ CLUSTER_COLORS = [_cmap(i / max(N_CLUSTERS - 1, 1)) for i in range(N_CLUSTERS)]
 
 def _ax_labels(ax):
     if DATA_TYPE == "time_interp":
-        ax.set_xlabel("Normalized time", fontsize=14)
-        ax.set_ylabel("Average relative position", fontsize=14)
+        ax.set_xlabel("Normalized time", fontsize=18, labelpad=8)
+        ax.set_ylabel("Average relative position", fontsize=18)
         ax.set_ylim(0, 1)
     else:
-        ax.set_xlabel("Relative position", fontsize=14)
-        ax.set_ylabel("Average probability", fontsize=14)
+        ax.set_xlabel("Relative position", fontsize=18, labelpad=8)
+        ax.set_ylabel("Average probability", fontsize=18)
         ax.set_ylim(bottom=0)   # auto-scale top; histogram probs are ~0–0.05
-    ax.tick_params(axis='both', labelsize=12)
+    ax.tick_params(axis='both', labelsize=16)
     ax.set_xlim(0, 1)
 
 
@@ -141,8 +145,8 @@ for g, ax in enumerate(axes1):
         ax.plot(BIN_CENTERS, centroids[idx], color=CLUSTER_COLORS[idx], lw=1.5,
                 label=f"C{idx + 1} (n={cluster_counts[idx]})")
     _ax_labels(ax)
-    ax.legend(fontsize=13)
-    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=18)
+    ax.legend(fontsize=16)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} clusters)", fontsize=20)
 
 fig1.savefig(OUTPUT_PATH, dpi=150)
 shutil.copy(OUTPUT_PATH, _MAIN_PAPER_DIR)
@@ -174,8 +178,8 @@ for g, ax in enumerate(axes2):
         ax.plot(BIN_CENTERS, sample_rows[idx], color=CLUSTER_COLORS[idx], lw=1.2, alpha=0.75,
                 label=f"Sample {idx + 1} (row {row_i})")
     _ax_labels(ax)
-    ax.legend(fontsize=13)
-    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=18)
+    ax.legend(fontsize=16)
+    ax.set_title(f"Group {g + 1}  ({len(member_idxs)} samples)", fontsize=20)
 
 fig2.savefig(OUTPUT_PATH_SAMPLE, dpi=150)
 shutil.copy(OUTPUT_PATH_SAMPLE, _MAIN_PAPER_DIR)
