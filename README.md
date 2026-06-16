@@ -228,18 +228,19 @@ python src/pipelines/match_gaze.py
 # Step 3: Extract pairwise and pointwise behavioral features
 python src/pipelines/extract_features.py
 
+# Step 4: Additional worker features 
+python src/additional-worker-behavior-features.py
+
 # Optional: Analyze worker quality
 python src/pipelines/analyze_quality.py
 
-# Optional: Output worker quality statistics
-python src/step-3-analyze-behavior.py
 ```
 
 ### Output Files:
 - `output/query_data.json` - Structured query data (from Step 1)
 - `user_behavior/*/*_query_id_assigned.csv` - Annotated behavioral data files (from Step 2)
 - `output/extracted_features.csv` - Features for preference prediction (from Step 3)
+- `output/all_metrics.txt` - Worker features on behavior (Step 4)
 - `output/low_quality_workers.csv` - Worker quality report (optional)
 - `output/worker_quality_report.txt` - Detailed quality analysis (optional)
-- `output/all_metrics.txt` - Quality statistics of workers (optional)
 ---
