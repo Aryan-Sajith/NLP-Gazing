@@ -230,6 +230,9 @@ python src/pipelines/extract_features.py
 
 # Optional: Analyze worker quality
 python src/pipelines/analyze_quality.py
+
+# Optional: Output worker quality statistics
+python src/step-3-analyze-behavior.py
 ```
 
 ### Output Files:
@@ -238,5 +241,5 @@ python src/pipelines/analyze_quality.py
 - `output/extracted_features.csv` - Features for preference prediction (from Step 3)
 - `output/low_quality_workers.csv` - Worker quality report (optional)
 - `output/worker_quality_report.txt` - Detailed quality analysis (optional)
-
+- `output/all_metrics.txt` - Quality statistics of workers (optional)
 ---

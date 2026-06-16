@@ -45,8 +45,8 @@ EDITED_TASK_TABLE_FILE = Path("edit_task_table.csv")
 START_DATE = pd.to_datetime("2024-01-19 00:00:01")
 END_DATE = pd.to_datetime("2027-11-30 14:24:56")
 
-OUTPUT_CSV = Path("all_metrics.csv")
-TO_OUTPUT_CSV = False #False gives txt file 
+OUTPUT_CSV = Path("output/all_metrics.csv")
+TO_OUTPUT_CSV = True #False gives txt file 
 # --------------------------------------------------------------------------- #
 # UTILITIES
 # --------------------------------------------------------------------------- #
